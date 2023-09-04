@@ -364,126 +364,126 @@ class CoupledModes(object):
         return zOut, self.omega, self.omega_p, self.t, fieldSpec, fieldTime
 
 
-#Define the parameters
-n = 13
-dt = 0.1
-dz = 0.1e-4
+# #Define the parameters
+# n = 13
+# dt = 0.1
+# dz = 0.1e-4
 
-#speed of light in m/ps
-c = 299792458e-12
-
-
-#define wavelengths
-lambda_p = 532e-9
-lambda_s = 1064e-9
-
-#define frequencies
-om_p = 2*np.pi*c/lambda_p
-om_s = 2*np.pi*c/lambda_s
-om_i = om_p - om_s
-
-#define idler wavelength from energy conservation
-lambda_i = 2*np.pi*c/om_i
-
-#define numerical frequencies for the solver
-omega_s = -(om_p - om_s)
-omega_i = -(om_p - om_i)
+# #speed of light in m/ps
+# c = 299792458e-12
 
 
-import type0_beta_5perMgO_LN as betaFunctionType0
-import typeII_beta_5perMgO_LN as betaFunctionTypeII
-#define parameters for the crystal
-L = 4000e-6
+# #define wavelengths
+# lambda_p = 532e-9
+# lambda_s = 1064e-9
 
-#qpm parameters
-T = 36
-# ordinaryAxisBool = True
-# QPMPeriod = 5.916450343734758e-6
-QPMPeriod = 6.96e-6
-# beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=ordinaryAxisBool, temperature=T)
-# QPM_bool = True
+# #define frequencies
+# om_p = 2*np.pi*c/lambda_p
+# om_s = 2*np.pi*c/lambda_s
+# om_i = om_p - om_s
 
-#type 2 parameters
-beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
-QPM_bool = False
+# #define idler wavelength from energy conservation
+# lambda_i = 2*np.pi*c/om_i
 
-#coupling strength
-gamma = 1e-1
-alpha_s = 0
-alpha_i = 0
-printBool = True
-rtol = 1e-4
-nsteps = 10000
-
-cnlse = CoupledModes(n, dt, dz, L, beta, gamma, lambda_p, omega_s, omega_i, alpha_s, alpha_i, printBool, rtol, nsteps)
-#Initial conditions
-T0 = 500
-Ap_0 = cnlse.makeGaussianInput(T0)
-As_0 = cnlse.makeGaussianInput(T0)
-# As_0 = cnlse.makeCWInput(1)
-Ai_0 = np.zeros_like(Ap_0)
-
-cnlse.setInitialConditions(np.array([As_0, Ai_0, Ap_0]))
-
-def makeGaussianInputTest(T0, Toff = 0):
-    field = np.zeros_like(cnlse.t, dtype = complex)
-    field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((cnlse.t + Toff)/T0)**(2))
-    return field
-
-def makeGaussianInputTest2(T0, Toff = 0):
-    field = np.zeros_like(cnlse.t, dtype = complex)
-    field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((cnlse.t + Toff)/T0)**(2))*np.kaiser(2**n,0)
-    return field
-
-def makeGaussianInputTest3(T0, Toff, timeAxis):
-    field = np.zeros_like(timeAxis, dtype = complex)
-    field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((timeAxis + Toff)/T0)**(2))
-    return field
-
-newN = 2**18
-newT = np.arange(-newN/2, newN/2)*cnlse.dt
-newdOmega = 2*np.pi/(newN*cnlse.dt)
-newOmega = np.arange(-newN/2, newN/2)*newdOmega
-
-newOmegaReal = newOmega + cnlse.omega_p
-newbetap = cnlse.kp_fit(newOmegaReal)
-newbetap = cnlse.transformBeta(newbetap, cnlse.k_reference, newOmegaReal, cnlse.omega_p)
+# #define numerical frequencies for the solver
+# omega_s = -(om_p - om_s)
+# omega_i = -(om_p - om_i)
 
 
-newGauss = makeGaussianInputTest3(T0,0, timeAxis = newT)
+# import type0_beta_5perMgO_LN as betaFunctionType0
+# import typeII_beta_5perMgO_LN as betaFunctionTypeII
+# #define parameters for the crystal
+# L = 4000e-6
 
+# #qpm parameters
+# T = 36
+# # ordinaryAxisBool = True
+# # QPMPeriod = 5.916450343734758e-6
+# QPMPeriod = 6.96e-6
+# # beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=ordinaryAxisBool, temperature=T)
+# # QPM_bool = True
+
+# #type 2 parameters
+# beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
+# QPM_bool = False
+
+# #coupling strength
+# gamma = 1e-1
+# alpha_s = 0
+# alpha_i = 0
+# printBool = True
+# rtol = 1e-4
+# nsteps = 10000
+
+# cnlse = CoupledModes(n, dt, dz, L, beta, gamma, lambda_p, omega_s, omega_i, alpha_s, alpha_i, printBool, rtol, nsteps)
+# #Initial conditions
+# T0 = 500
+# Ap_0 = cnlse.makeGaussianInput(T0)
+# As_0 = cnlse.makeGaussianInput(T0)
+# # As_0 = cnlse.makeCWInput(1)
+# Ai_0 = np.zeros_like(Ap_0)
+
+# cnlse.setInitialConditions(np.array([As_0, Ai_0, Ap_0]))
+
+# def makeGaussianInputTest(T0, Toff = 0):
+#     field = np.zeros_like(cnlse.t, dtype = complex)
+#     field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((cnlse.t + Toff)/T0)**(2))
+#     return field
+
+# def makeGaussianInputTest2(T0, Toff = 0):
+#     field = np.zeros_like(cnlse.t, dtype = complex)
+#     field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((cnlse.t + Toff)/T0)**(2))*np.kaiser(2**n,0)
+#     return field
+
+# def makeGaussianInputTest3(T0, Toff, timeAxis):
+#     field = np.zeros_like(timeAxis, dtype = complex)
+#     field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((timeAxis + Toff)/T0)**(2))
+#     return field
+
+# newN = 2**18
+# newT = np.arange(-newN/2, newN/2)*cnlse.dt
+# newdOmega = 2*np.pi/(newN*cnlse.dt)
+# newOmega = np.arange(-newN/2, newN/2)*newdOmega
+
+# newOmegaReal = newOmega + cnlse.omega_p
+# newbetap = cnlse.kp_fit(newOmegaReal)
+# newbetap = cnlse.transformBeta(newbetap, cnlse.k_reference, newOmegaReal, cnlse.omega_p)
+
+
+# newGauss = makeGaussianInputTest3(T0,0, timeAxis = newT)
+
+# # plt.figure()
+# # plt.plot(cnlse.t, np.abs(makeGaussianInputTest(1000))**2)
+# # plt.plot(cnlse.t, np.abs(makeGaussianInputTest2(1000))**2)
+# # plt.plot(newT, np.abs(newGauss)**2)
+# plt.xlim(-10,10)
 # plt.figure()
-# plt.plot(cnlse.t, np.abs(makeGaussianInputTest(1000))**2)
-# plt.plot(cnlse.t, np.abs(makeGaussianInputTest2(1000))**2)
-# plt.plot(newT, np.abs(newGauss)**2)
-plt.xlim(-10,10)
-plt.figure()
 
-nowindow = cnlse.fft(makeGaussianInputTest(T0))
-window = cnlse.fft(makeGaussianInputTest2(T0))
-accurate = cnlse.fft(newGauss)
-z = 0
+# nowindow = cnlse.fft(makeGaussianInputTest(T0))
+# window = cnlse.fft(makeGaussianInputTest2(T0))
+# accurate = cnlse.fft(newGauss)
+# z = 0
 
-nowindow = nowindow * np.exp(1j*cnlse.betap*z)
-window = window * np.exp(1j*cnlse.betap*z)
-accurate = accurate * np.exp(1j*newbetap*z)
+# nowindow = nowindow * np.exp(1j*cnlse.betap*z)
+# window = window * np.exp(1j*cnlse.betap*z)
+# accurate = accurate * np.exp(1j*newbetap*z)
 
-nowindow = cnlse.ifft(nowindow)
-window = cnlse.ifft(window)
-accurate = cnlse.ifft(accurate)
+# nowindow = cnlse.ifft(nowindow)
+# window = cnlse.ifft(window)
+# accurate = cnlse.ifft(accurate)
 
-plt.plot(cnlse.t, np.abs(nowindow)**2, label = "no window")
-plt.plot(cnlse.t, np.abs(window)**2, label = "window")
-plt.plot(newT, np.abs(accurate)**2, label = "accurate")
-plt.xlim(-10,10)
+# plt.plot(cnlse.t, np.abs(nowindow)**2, label = "no window")
+# plt.plot(cnlse.t, np.abs(window)**2, label = "window")
+# plt.plot(newT, np.abs(accurate)**2, label = "accurate")
+# plt.xlim(-10,10)
 
-plt.legend()
+# plt.legend()
 
 
 
 
 
-#%%
-z, omega, omega0, t, fieldSpec, fieldTime = cnlse.run()
+# #%%
+# z, omega, omega0, t, fieldSpec, fieldTime = cnlse.run()
 
-plt.plot(t, np.abs(fieldTime[-1, :, 1])**2)
+# plt.plot(t, np.abs(fieldTime[-1, :, 1])**2)

@@ -448,7 +448,7 @@ if __name__ == '__main__':
     saveArray = np.array([G_array, timeWidthArrayOutput, freqWidthArrayOutput, stitchTimes, gs.t, gs.omega, gs.lambdaAxis, parametersArr], dtype=object)
     typeString = "type0" if beta.QPMbool else "typeII"
     saveString = "stitchedGreens_" + typeString + "_gamma " + str(gamma) + "_T0p " + str(T0p) + "_L " + str(L)
-    np.save(saveString, saveArray)
+    # np.save(saveString, saveArray)
 
 
     
