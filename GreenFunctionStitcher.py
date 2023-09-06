@@ -40,6 +40,14 @@ class GreenFunctionStitcher(object):
         self.lambdaAxis = self.gf.lambdaAxis
         self.indistinguishableBool = self.gf.solverObject.beta.indistinguishableBool
 
+    def findInitialCenterTime(self, T0):
+        fastGF = gfep.GreenFunctionsExtractor(1, False)
+        fastGF.makeSolverParameters(self.parameterArray, SPDCNumerical.CoupledModes(*self.parameterArray))
+        fastGF.makePump(gs.gf.solverObject.makeGaussianInput(self.T0p))
+        fastGF.makeBasisFunctions(T0, 0)
+        initialCenterTime = np.mean(fastGF.initOffset)
+        del fastGF
+        return initialCenterTime
 
     def extractGreenFunctions(self, T0, basisOffset, checkBool = False):
         self.gf.makeBasisFunctions(T0, basisOffset)
@@ -369,7 +377,7 @@ if __name__ == '__main__':
     ###################################################
     ###### CME parameters ######  
     #Number of grid points 
-    n = 13
+    n = 12
     #Time step and spatial step. The spatial step will be adjusted slightly depending on the crystal length
     dt = 1e-2
     dz = 0.2e-3
@@ -397,16 +405,16 @@ if __name__ == '__main__':
     L = 4000e-6
 
     # Define the beta function for type II phase matching
-    # beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
+    beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
 
     # Define the beta function for type 0 phase matching
     QPMPeriod = 5.916450343734758e-6
     beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
 
     #Nonlinear coefficient
-    gamma = 1e3
+    gamma = 1e-5
     #Pump pulse duration in ps
-    T0p = 5
+    T0p = 2
 
     #Define numerical frequencies
     omega_s = -(om_p - om_s)
@@ -416,29 +424,32 @@ if __name__ == '__main__':
 
     #### Green's function parameters ####
     #Define the number of basis functions to be used in the Green's function extraction
-    kmax = 80
+    kmax = 20
 
     # #Define the basis functions (hermite gaussians) to be used in the Green's function extraction
     # T0 = T0p/5
 
     # T0 = 1.288/4
-    T0 = T0p/25
+    T0 = T0p/5
 
     gs = GreenFunctionStitcher(parametersArr, T0p, kmax, debugBool = True)
     # gs.gf.makePump(gs.gf.solverObject.makeCWInput())
+
+    initialCenterTime = gs.findInitialCenterTime(T0)*0
     gs.gf.makePump(gs.gf.solverObject.makeGaussianInput(T0p))
+
     print("Extracting initial Green's functions...")
     t1 = time.time()
-    G_array, o, s, centerTime, widthOffsetInitial, initWidth, timeWidthArray, freqWidthArray = gs.extractGreenFunctions(T0, 0, checkBool = False)
+    G_array, o, s, centerTime, widthOffsetInitial, initWidth, timeWidthArray, freqWidthArray = gs.extractGreenFunctions(T0, -initialCenterTime, checkBool = False)
     print("Green's function extraction took " + str(time.time() - t1) + " seconds.")
-    validationThreshold = 0.98
+    validationThreshold = 0.98/2
     A_test_init = gs.makeTestFunction(centerTime[0], T0)
     validationBool, initOverlap = gs.validatePropagation(G_array[0], A_test_init, validationThreshold, plotBool = False)
     print("Calculated initial validation overlap: " + str(initOverlap))
     if not validationBool:
         print("Validation failed with threshold of " + str(validationThreshold) + ". Consider increasing the number of basis functions or the time resolution.")
         sys.exit()
-
+    #%%
     G_array, timeWidthArray, freqWidthArray, stitchTimes1 = gs.iterativeStitch(G_array, centerTime, widthOffsetInitial, initWidth, validationThreshold, timeWidthArray, freqWidthArray, 0)
     print("######################################### Changing direction #########################################")
     G_array, timeWidthArray, freqWidthArray, stitchTimes2 = gs.iterativeStitch(G_array, centerTime, widthOffsetInitial, initWidth, validationThreshold, timeWidthArray, freqWidthArray, 1)
