@@ -68,8 +68,8 @@ class GreenFunctionsExtractor(object):
 
         betaspl = self.solverObject.timeShiftArray[0]/2
         betaipl = self.solverObject.timeShiftArray[1]/2
-        self.initOffset = np.array([-betaipl + basisFunctionOffset, -betaspl + basisFunctionOffset])
-
+        self.initOffset = np.array([-betaspl + basisFunctionOffset, -betaipl + basisFunctionOffset])
+        print(self.initOffset)
         try:
             for k in range(self.kmax):
                 self.A_basis[k,:,0] = self.solverObject.makeHermiteGaussianBasisFunctions(self.initOffset[0], T0, k)
@@ -124,8 +124,12 @@ class GreenFunctionsExtractor(object):
         A_noise = np.zeros_like(Ap_0)
 
         #Get the time shifts needed for the basis functions decomposition
-        crossTime = self.timeShiftArray[basisIndex]/2
-        selfTime = self.timeShiftArray[int(not(basisIndex))]/2
+        # crossTime = self.timeShiftArray[basisIndex]/2
+        # selfTime = self.timeShiftArray[int(not(basisIndex))]/2
+
+        crossTime = self.timeShiftArray[int(not(basisIndex))]/2
+        selfTime = self.timeShiftArray[basisIndex]/2
+
         kmax = self.kmax
 
         inIdx = int(basisIndex)
