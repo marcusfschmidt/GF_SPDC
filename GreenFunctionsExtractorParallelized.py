@@ -69,7 +69,6 @@ class GreenFunctionsExtractor(object):
         betaspl = self.solverObject.timeShiftArray[0]/2
         betaipl = self.solverObject.timeShiftArray[1]/2
         self.initOffset = np.array([-betaspl + basisFunctionOffset, -betaipl + basisFunctionOffset])
-        print(self.initOffset)
         try:
             for k in range(self.kmax):
                 self.A_basis[k,:,0] = self.solverObject.makeHermiteGaussianBasisFunctions(self.initOffset[0], T0, k)

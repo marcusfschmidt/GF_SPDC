@@ -408,8 +408,8 @@ if __name__ == '__main__':
     beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
 
     # Define the beta function for type 0 phase matching
-    QPMPeriod = 5.916450343734758e-6
-    beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
+    # QPMPeriod = 5.916450343734758e-6
+    # beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
 
     #Nonlinear coefficient
     gamma = 1e-5
@@ -435,12 +435,13 @@ if __name__ == '__main__':
     gs = GreenFunctionStitcher(parametersArr, T0p, kmax, debugBool = True)
     # gs.gf.makePump(gs.gf.solverObject.makeCWInput())
 
-    initialCenterTime = gs.findInitialCenterTime(T0)*0
+    ## slå den her ihjel
+    initialCenterTime = gs.findInitialCenterTime(T0)
     gs.gf.makePump(gs.gf.solverObject.makeGaussianInput(T0p))
 
     print("Extracting initial Green's functions...")
     t1 = time.time()
-    G_array, o, s, centerTime, widthOffsetInitial, initWidth, timeWidthArray, freqWidthArray = gs.extractGreenFunctions(T0, -initialCenterTime, checkBool = False)
+    G_array, o, s, centerTime, widthOffsetInitial, initWidth, timeWidthArray, freqWidthArray = gs.extractGreenFunctions(T0, initialCenterTime, checkBool = False)
     print("Green's function extraction took " + str(time.time() - t1) + " seconds.")
     validationThreshold = 0.98/2
     A_test_init = gs.makeTestFunction(centerTime[0], T0)
