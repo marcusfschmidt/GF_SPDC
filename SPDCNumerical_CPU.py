@@ -15,12 +15,13 @@ import timeit
 
 class CoupledModes(object):
 
-    def __init__(self, n, dt, dz, L, beta, gamma, lambda_p, omega_s = 0, omega_i = 0, alpha_s = 0, alpha_i = 0, printBool = False, rtol = 1e-3, nsteps = 10000) -> None:
+    def __init__(self, n, dt, dz, offset, L, beta, gamma, lambda_p, omega_s = 0, omega_i = 0, alpha_s = 0, alpha_i = 0, printBool = False, rtol = 1e-3, nsteps = 10000) -> None:
 
         """
         n: number of points in the grid
         dt: time step
         dz: propagation step
+        offset: time offset to be added to the time axis
         L: Propagation length
         beta: Dispersion coefficients or the full beta function
         gamma: Nonlinear coefficient
@@ -38,6 +39,7 @@ class CoupledModes(object):
         self.N = 2**int(n)
         self.dt = dt
         self.dz = dz
+        self.offset = offset
         self.L = L
         self.beta = beta
         self.gamma = gamma
@@ -61,7 +63,7 @@ class CoupledModes(object):
         self.hbar = 1.054571817*1e-34*1e12
 
         #Make axes
-        self.t = np.arange(-self.N/2, self.N/2)*self.dt
+        self.t = np.arange(-self.N/2, self.N/2)*self.dt + offset
         self.domega = 2*np.pi/(self.N*self.dt)
         self.omega = np.arange(-self.N/2, self.N/2)*self.domega
 
