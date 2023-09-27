@@ -317,9 +317,9 @@ class GreenFunctionStitcher(object):
    
                 #if the difference between old and new stitch overlaps is within 3%, break the loop
 
-                # if abs(stitchOverlapNew - stitchOverlapOld) < 0.03:
-                #     print("New Green's function provides a decent solution at the stitching point, continuing.")
-                #     break
+                if abs(stitchOverlapNew - stitchOverlapOld) < 0.03:
+                    print("New Green's function provides a decent solution at the stitching point, continuing.")
+                    break
 
                 widthOffsetFromGlobalCenter -= stitchHalfWidth
                 # gs.stitchTimeHelper(int(not(lowHighIndex)))*stitchWidth
