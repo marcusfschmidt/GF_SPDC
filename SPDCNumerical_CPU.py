@@ -225,14 +225,24 @@ class CoupledModes(object):
         field[centerIdx] = np.sqrt(P0/(2*np.pi))/df
         return self.normalizeInput(field)
 
-    def makeHermiteGaussianBasisFunctions(self, Toff, T0, n, fftBool = True):
-        field = np.zeros_like(self.t, dtype = complex)
-        field += self.hermiteGaussianFunction(n, self.t + Toff, T0)
+
+    def makeHermiteGaussianBasisFunctionHelper(self, timeAxis, Toff, T0, n, fftBool = True):
+        field = np.zeros_like(timeAxis, dtype = complex)
+        field += self.hermiteGaussianFunction(n, timeAxis + Toff, T0)
         norm = np.sum(np.abs(field)**2)*self.dt
         field = field/np.sqrt(norm)
         if fftBool:
             field = self.fft(field)
         return field
+
+    def makeHermiteGaussianBasisFunctions(self, Toff, T0, n, fftBool = True, newTimeAxis = 0):
+        if newTimeAxis == 0:
+            return self.makeHermiteGaussianBasisFunctionHelper(self.t, Toff, T0, n, fftBool)
+        else:
+            return self.makeHermiteGaussianBasisFunctionHelper(newTimeAxis, Toff, T0, n, fftBool)
+
+     
+            
 
     def hermiteGaussianFunction(self, n, t, width):
         field = 1/np.exp(n)*np.exp(-t**2/(2*width**2))*special.eval_hermite(n, t/width) 

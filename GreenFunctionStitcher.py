@@ -160,14 +160,14 @@ class GreenFunctionStitcher(object):
         return returnBool, overlap
 
     
-    def makeTestFunction(self, offset, T0, timeAxisOffset = 0):
-        temporaryParametersArray = np.copy(self.parameterArray)
-        temporaryParametersArray[3] = timeAxisOffset 
-        temporarySolverObject = SPDCNumerical.CoupledModes(*temporaryParametersArray)
+    def makeTestFunction(self, offset, T0, newTimeAxis = 0):
+        # temporaryParametersArray = np.copy(self.parameterArray)
+        # temporaryParametersArray[3] = timeAxisOffset 
+        # temporarySolverObject = SPDCNumerical.CoupledModes(*temporaryParametersArray)
 
-        testFunction = temporarySolverObject.makeHermiteGaussianBasisFunctions(offset, T0, 0)
-        del temporarySolverObject
-        del temporaryParametersArray
+        testFunction = self.gf.makeHermiteGaussianBasisFunctions(offset, T0, 0, newTimeAxis = newTimeAxis)
+        # del temporarySolverObject
+        # del temporaryParametersArray
         return testFunction    
 
     
@@ -186,6 +186,7 @@ class GreenFunctionStitcher(object):
 
     def stitchGreenFunctions(self, initOffset_old, initOffset_new, G_old, G_new):
 
+        newTime = np.arange(self.old_t[0], self.t[-1], self.dt)
 
         if not self.indistinguishableBool:
             Gis_old, G_ii_old, G_si_old, G_ss_old = G_old
@@ -194,21 +195,18 @@ class GreenFunctionStitcher(object):
             t1_idler, t1_signal = initOffset_old
             t2_idler, t2_signal = initOffset_new
 
-            G_is, G_ii = self.stitchHelperFunction(Gis_old, G_ii_old, Gis_new, G_ii_new, t1_idler, t2_idler)
-            G_si, G_ss = self.stitchHelperFunction(G_si_old, G_ss_old, G_si_new, G_ss_new, t1_signal, t2_signal)
-            return (G_is, G_ii, G_si, G_ss)
+            G_is, G_ii = self.stitchHelperFunction(Gis_old, G_ii_old, Gis_new, G_ii_new, t1_idler, t2_idler, newTime)
+            G_si, G_ss = self.stitchHelperFunction(G_si_old, G_ss_old, G_si_new, G_ss_new, t1_signal, t2_signal, newTime)
+            return (G_is, G_ii, G_si, G_ss), newTime
         else:
             G_old, F_old = G_old
             G_new, F_new = G_new
             t1, _ = initOffset_old
             t2, _ = initOffset_new
-            G, F = self.stitchHelperFunction(G_old, F_old, G_new, F_new, t1, t2)
-            return (G, F)
+            G, F = self.stitchHelperFunction(G_old, F_old, G_new, F_new, t1, t2, newTime)
+            return (G, F), newTime
 
-    def stitchHelperFunction(self, G1, F1, G2, F2, t1, t2):
-        
-        newTime = np.arange(self.old_t[0], self.t[-1], self.dt)
-
+    def stitchHelperFunction(self, G1, F1, G2, F2, t1, t2, newTime):
 
         G1 = np.pad(G1, ((0, newTime.size - G1.shape[0]), (0, newTime.size - G1.shape[1])), 'constant')
         F1 = np.pad(F1, ((0, newTime.size - F1.shape[0]), (0, newTime.size - F1.shape[1])), 'constant')
@@ -307,6 +305,7 @@ class GreenFunctionStitcher(object):
 
         stitchTimes = []
         testcount = 0
+        newTimeAxis = 0
         while True:
             gc.collect()
 
@@ -315,13 +314,25 @@ class GreenFunctionStitcher(object):
                 print("Offset exceeds time axis, stitching complete. Inspect the output to determine if the time window should be extended.")
                 break
 
-            A_test = self.makeTestFunction(testOffset, T0, self.parameterArray[3])
+            A_test = self.makeTestFunction(testOffset, T0, newTimeAxis)
             
             _, overlap = self.validatePropagation(G_array[testIndex], A_test, validationThreshold, signalIdlerTestIndex, plotBool=False)
             self.gf.debugPrint("Test overlap at edge of region: " + str(overlap))
             if overlap > 0.999:
                 print("Test overlap is greater than 99.9%, stitching complete.")
                 break
+       
+
+
+       # if padIndex == 0:
+            #     paddedTimeArray = np.linspace(self.t[-1] + self.dt, self.t[-1] + padSize*self.dt, padSize)
+            #     newTimeAxis = np.hstack((self.t, paddedTimeArray))
+            # else:
+            #     paddedTimeArray = np.linspace(self.t[0] - padSize*self.dt, self.t[0] - self.dt, padSize)
+            #     newTimeAxis = np.hstack((paddedTimeArray, self.t))
+            
+            # return self.makeHermiteGaussianBasisFunctionHelper(newTimeAxis, Toff, T0, n, fftBool)
+
 
         
             #### Check Green functions at the stitching points ###
@@ -329,11 +340,9 @@ class GreenFunctionStitcher(object):
             while True:
 
                 print("Extracting new Green's functions...")
-                self.old_t = self.t
-                self.previousCenterTime = self.parameterArray[3]
+                previousCenterTime = self.parameterArray[3]
                 self.parameterArray[3] = np.mean(centerTime)
                 self.gf.makeSolverParameters(self.parameterArray, SPDCNumerical.CoupledModes(*self.parameterArray))
-                self.t = self.gf.t
 
                 G_array_new, _, _, centerTime_new, widthOffsetFromNewCenter, width_new, timeWidthArray_new, freqWidthArray_new = gs.extractGreenFunctions(T0, widthOffsetFromGlobalCenter[lowHighIndex], checkBool=False)
                 stitchHalfWidth = (centerTime_new[signalIdlerTestIndex] - centerTime[signalIdlerTestIndex])/2
@@ -345,9 +354,12 @@ class GreenFunctionStitcher(object):
                     print("Stitching point moved, continuing.")
                     break
                 
-                A_stitchTestOld = self.makeTestFunction(stitchTime, T0, self.previousCenterTime)
-                A_stitchTestNew = self.makeTestFunction(stitchTime, T0, self.parameterArray[3]) 
-                ############################################################
+                # A_stitchTestOld = self.makeTestFunction(stitchTime, T0, self.previousCenterTime)
+                # A_stitchTestNew = self.makeTestFunction(stitchTime, T0, self.parameterArray[3]) 
+
+                A_stitchTestOld = self.makeTestFunction(stitchTime, T0, newTimeAxis)
+                A_stitchTestNew = self.makeTestFunction(stitchTime, T0)
+                # ############################################################
                  
                 _, stitchOverlapNew = self.validatePropagation(G_array_new[testIndex], A_stitchTestNew, validationThreshold, signalIdlerTestIndex, plotBool=False)
                 _, stitchOverlapOld = self.validatePropagation(G_array[testIndex], A_stitchTestOld, validationThreshold, signalIdlerTestIndex, plotBool=False)
@@ -369,11 +381,12 @@ class GreenFunctionStitcher(object):
             timeWidthArray_out, freqWidthArray_out = self.compareWidthArrays(timeWidthArray, timeWidthArray_new, freqWidthArray, freqWidthArray_new)
            
             print("Stitching Green's functions...")
-            G_array_updated = self.stitchGreenFunctions(centerTime, centerTime_new, G_array, G_array_new)
+            G_array_updated, newTimeAxis = self.stitchGreenFunctions(centerTime, centerTime_new, G_array, G_array_new)
             del G_array_new
-
+            
+            A_test = self.makeTestFunction(testOffset, T0, newTimeAxis)
             _, overlap_new = self.validatePropagation(G_array_updated[testIndex], A_test, validationThreshold, signalIdlerTestIndex)
-            gs.gf.debugPrint("New validation overlap at edge of region: " + str(overlap_new))
+            gs.gf.debugPrint("New validation overlap at edge of initial region: " + str(overlap_new))
             # plt.figure()
             # plt.title("Second test, stitching moved: " + str(stitchMoveBool))
             # plt.imshow(np.abs(G_array_updated[0]), extent=[self.t[0], self.t[-1], self.t[0], self.t[-1]], origin='lower')
