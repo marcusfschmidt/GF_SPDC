@@ -235,8 +235,8 @@ class CoupledModes(object):
             field = self.fft(field)
         return field
 
-    def makeHermiteGaussianBasisFunctions(self, Toff, T0, n, fftBool = True, newTimeAxis = 0):
-        if newTimeAxis == 0:
+    def makeHermiteGaussianBasisFunctions(self, Toff, T0, n, fftBool = True, newTimeAxis = False):
+        if type(newTimeAxis) == bool:
             return self.makeHermiteGaussianBasisFunctionHelper(self.t, Toff, T0, n, fftBool)
         else:
             return self.makeHermiteGaussianBasisFunctionHelper(newTimeAxis, Toff, T0, n, fftBool)

@@ -111,7 +111,7 @@ class GreenFunctionStitcher(object):
 
 
     def testOverlap(self, args):
-        G, A_test, basisIndex, plotbool = args
+        G, A_test, basisIndex, newTimeAxis, timeOffset, plotbool = args
 
         Ap_0 = self.gf.Ap_0
         
@@ -129,29 +129,33 @@ class GreenFunctionStitcher(object):
 
         inputField, outputField = self.gf.runCNLSE(initConditions, cnlse)
 
-        input = inputField[:, inIdx]
+        # input = inputField[:, inIdx]
         output = outputField[:, outIdx]
         propagatedInput = outputField[:, inIdx]
         
 
         # greenOutput = np.sum(G*input,1)*self.dt
+        # greenOutput = np.sum(G*input,1)*self.dt
+
+        input = self.gf.solverObject.makeHermiteGaussianBasisFunctions(timeOffset, T0, basisIndex, newTimeAxis = newTimeAxis)
+
         greenOutput = np.sum(G*input,1)*self.dt
         overlap = self.gf.calcOverlap(greenOutput, output)
         if plotbool:
-            plt.figure()
-            plt.plot(self.t, np.abs(input)**2)
+            # plt.figure()
+            # plt.plot(self.t, np.abs(input)**2)
 
-            plt.figure()
-            plt.plot(self.t, np.abs(greenOutput)**2)
-            plt.plot(self.t, np.abs(output)**2)
-            # plt.plot(self.t, np.abs(propagatedInput)**2)
+            # plt.figure()
+            # plt.plot(self.t, np.abs(greenOutput)**2)
+            # plt.plot(self.t, np.abs(output)**2)
+            # # plt.plot(self.t, np.abs(propagatedInput)**2)
 
         #delete the variables to free up memory
         del input, output, propagatedInput, greenOutput, cnlse
         return overlap
     
-    def validatePropagation(self, G, A_test, threshold, basisIndex = 0, plotBool = False):
-        argList = (G, A_test, basisIndex, plotBool)
+    def validatePropagation(self, G, A_test, threshold, basisIndex = 0, newTimeAxis = False, timeOffset = 0, plotBool = False):
+        argList = (G, A_test, basisIndex, newTimeAxis, timeOffset, plotBool)
         overlap = self.testOverlap(argList)
 
         returnBool = True
@@ -160,12 +164,12 @@ class GreenFunctionStitcher(object):
         return returnBool, overlap
 
     
-    def makeTestFunction(self, offset, T0, newTimeAxis = 0):
+    def makeTestFunction(self, offset, T0, newTimeAxis = False):
         # temporaryParametersArray = np.copy(self.parameterArray)
         # temporaryParametersArray[3] = timeAxisOffset 
         # temporarySolverObject = SPDCNumerical.CoupledModes(*temporaryParametersArray)
 
-        testFunction = self.gf.makeHermiteGaussianBasisFunctions(offset, T0, 0, newTimeAxis = newTimeAxis)
+        testFunction = self.gf.solverObject.makeHermiteGaussianBasisFunctions(offset, T0, 0, newTimeAxis = newTimeAxis)
         # del temporarySolverObject
         # del temporaryParametersArray
         return testFunction    
@@ -212,8 +216,6 @@ class GreenFunctionStitcher(object):
         F1 = np.pad(F1, ((0, newTime.size - F1.shape[0]), (0, newTime.size - F1.shape[1])), 'constant')
         G2 = np.pad(G2, ((0, newTime.size - G2.shape[0]), (0, newTime.size - G2.shape[1])), 'constant')
         F2 = np.pad(F2, ((0, newTime.size - F2.shape[0]), (0, newTime.size - F2.shape[1])), 'constant')
-
-        plt.imshow(np.abs(G1))
 
 
         abs_diff1 = np.abs(newTime + t1)  
@@ -305,8 +307,8 @@ class GreenFunctionStitcher(object):
 
         stitchTimes = []
         testcount = 0
-        newTimeAxis = 0
-        while True:
+        newTimeAxis = False
+        while testcount < 1:
             gc.collect()
 
             testOffset = centerTime[signalIdlerTestIndex] + self.stitchTimeHelper(lowHighIndex)*width/2
@@ -314,9 +316,9 @@ class GreenFunctionStitcher(object):
                 print("Offset exceeds time axis, stitching complete. Inspect the output to determine if the time window should be extended.")
                 break
 
-            A_test = self.makeTestFunction(testOffset, T0, newTimeAxis)
+            A_test = self.makeTestFunction(testOffset, T0)
             
-            _, overlap = self.validatePropagation(G_array[testIndex], A_test, validationThreshold, signalIdlerTestIndex, plotBool=False)
+            _, overlap = self.validatePropagation(G_array[testIndex], A_test, validationThreshold, signalIdlerTestIndex, newTimeAxis, testOffset, plotBool=False)
             self.gf.debugPrint("Test overlap at edge of region: " + str(overlap))
             if overlap > 0.999:
                 print("Test overlap is greater than 99.9%, stitching complete.")
@@ -337,27 +339,30 @@ class GreenFunctionStitcher(object):
         
             #### Check Green functions at the stitching points ###
             stitchMoveBool = False
+            stitchOffset = 0 
             while True:
 
                 print("Extracting new Green's functions...")
-                previousCenterTime = self.parameterArray[3]
+                # previousCenterTime = self.parameterArray[3]
+                self.old_t = self.t
                 self.parameterArray[3] = np.mean(centerTime)
                 self.gf.makeSolverParameters(self.parameterArray, SPDCNumerical.CoupledModes(*self.parameterArray))
+                self.t = self.gf.t
 
                 G_array_new, _, _, centerTime_new, widthOffsetFromNewCenter, width_new, timeWidthArray_new, freqWidthArray_new = gs.extractGreenFunctions(T0, widthOffsetFromGlobalCenter[lowHighIndex], checkBool=False)
                 stitchHalfWidth = (centerTime_new[signalIdlerTestIndex] - centerTime[signalIdlerTestIndex])/2
                 stitchTime = testOffset - stitchHalfWidth
 
                 if stitchMoveBool:
-                    A_test = A_stitchTest 
-                    stitchTimes.append(-stitchTime)
-                    print("Stitching point moved, continuing.")
+                    stitchOffset = stitchTime
+                    # A_test = A_stitchTest 
+                    print("Stitching point moved, edge region redefined as center of new Green's functions. Continuing...")
                     break
                 
                 # A_stitchTestOld = self.makeTestFunction(stitchTime, T0, self.previousCenterTime)
                 # A_stitchTestNew = self.makeTestFunction(stitchTime, T0, self.parameterArray[3]) 
 
-                A_stitchTestOld = self.makeTestFunction(stitchTime, T0, newTimeAxis)
+                A_stitchTestOld = self.makeTestFunction(stitchTime, T0, newTimeAxis = False)
                 A_stitchTestNew = self.makeTestFunction(stitchTime, T0)
                 # ############################################################
                  
@@ -372,11 +377,11 @@ class GreenFunctionStitcher(object):
                     break
 
                 widthOffsetFromGlobalCenter -= stitchHalfWidth
-                # gs.stitchTimeHelper(int(not(lowHighIndex)))*stitchWidth
                 stitchMoveBool = True
         
             #### End check Green functions at the stitching points ###
 
+            stitchTimes.append(-stitchTime)
             # Compare the time arrays to get minimum and maximum extent of the new Green's functions
             timeWidthArray_out, freqWidthArray_out = self.compareWidthArrays(timeWidthArray, timeWidthArray_new, freqWidthArray, freqWidthArray_new)
            
@@ -384,17 +389,17 @@ class GreenFunctionStitcher(object):
             G_array_updated, newTimeAxis = self.stitchGreenFunctions(centerTime, centerTime_new, G_array, G_array_new)
             del G_array_new
             
-            A_test = self.makeTestFunction(testOffset, T0, newTimeAxis)
+            A_test = self.makeTestFunction(testOffset + stitchOffset, T0, newTimeAxis)
             _, overlap_new = self.validatePropagation(G_array_updated[testIndex], A_test, validationThreshold, signalIdlerTestIndex)
             gs.gf.debugPrint("New validation overlap at edge of initial region: " + str(overlap_new))
-            # plt.figure()
-            # plt.title("Second test, stitching moved: " + str(stitchMoveBool))
-            # plt.imshow(np.abs(G_array_updated[0]), extent=[self.t[0], self.t[-1], self.t[0], self.t[-1]], origin='lower')
-            # # plt.xlim(-8,0)
-            # # plt.ylim(-2,5)
-            # plt.plot(self.t, np.abs(self.gf.solverObject.ifft(A_test)))
-            # plt.show(block=False)
-            # plt.pause(0.001)
+            plt.figure()
+            plt.title("Second test, stitching moved: " + str(stitchMoveBool))
+            plt.imshow(np.abs(G_array_updated[0]), extent=[self.t[0], self.t[-1], self.t[0], self.t[-1]], origin='lower')
+            # plt.xlim(-8,0)
+            # plt.ylim(-2,5)
+            plt.plot(self.t, np.abs(self.gf.solverObject.ifft(A_test)))
+            plt.show(block=False)
+            plt.pause(0.001)
 
 
             if overlap_new < 0.025:
@@ -459,8 +464,8 @@ if __name__ == '__main__':
     beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
 
     # Define the beta function for type 0 phase matching
-    # QPMPeriod = 5.916450343734758e-6
-    # beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
+    QPMPeriod = 5.916450343734758e-6
+    beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
 
     #Nonlinear coefficient
     gamma = 1e-6
@@ -501,9 +506,9 @@ if __name__ == '__main__':
 
 
 
-    G_array, timeWidthArray, freqWidthArray, stitchTimes1 = gs.iterativeStitch(G_array, centerTime, widthOffsetInitial, initWidth, validationThreshold, timeWidthArray, freqWidthArray, 0)
+    # G_array, timeWidthArray, freqWidthArray, stitchTimes1 = gs.iterativeStitch(G_array, centerTime, widthOffsetInitial, initWidth, validationThreshold, timeWidthArray, freqWidthArray, 0)
     # print("######################################### Changing direction #########################################")
-    # G_array, timeWidthArray, freqWidthArray, stitchTimes2 = gs.iterativeStitch(G_array, centerTime, widthOffsetInitial, initWidth, validationThreshold, timeWidthArray, freqWidthArray, 1)
+    G_array, timeWidthArray, freqWidthArray, stitchTimes2 = gs.iterativeStitch(G_array, centerTime, widthOffsetInitial, initWidth, validationThreshold, timeWidthArray, freqWidthArray, 1)
     # stitchTimes = stitchTimes1 + stitchTimes2
     # timeWidthArrayOutput = gs.outputWidthArray(timeWidthArray)
     # freqWidthArrayOutput = gs.outputWidthArray(freqWidthArray)
