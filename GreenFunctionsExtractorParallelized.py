@@ -248,10 +248,17 @@ class GreenFunctionsExtractor(object):
 
 
     #Helper function for calculating the overlap
-    def calcOverlap(self, gout, out):
+    def calcOverlap(self, gout, out, lowHighIndex = 0):
         gout = gout/np.sqrt(np.sum(np.abs(gout)**2)*self.dt)
         out = out/np.sqrt(np.sum(np.abs(out)**2)*self.dt)
-        
+
+        #when gout is larger than out, the overlap is calculated from the end or beginning of the array depending on the lowHighIndex
+        if lowHighIndex == 0:
+            gout = gout[-len(out):]
+        elif lowHighIndex == 1:
+            gout = gout[:len(out)]
+
+
         #now calculate overlap
         overlap = np.sum(np.conjugate(gout)*out)*self.dt
         overlap = np.abs(overlap)**2
