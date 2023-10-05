@@ -212,7 +212,7 @@ class GreenFunctionsExtractor(object):
             us, vs, ui, vi, uss, vss, uii,vii, rhoCross, rhoSelf = args
             argsList = [(vi, rhoCross, us), (vii, rhoSelf, uii), (vs, rhoCross, ui), (vss, rhoSelf, uss)]
 
-        with Pool() as p:
+        with Pool(processes=8) as p:
             results = p.map(self.parallelG, argsList)
             p.close()
             p.join()
