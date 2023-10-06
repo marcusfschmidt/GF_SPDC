@@ -209,9 +209,9 @@ class GreenFunctionStitcher(object):
     
 
 
-    def stitchGreenFunctions(self, initOffset_old, initOffset_new, G_old, G_new):
+    def stitchGreenFunctions(self, initOffset_old, initOffset_new, G_old, G_new, oldTimeAxis, newTimeAxis):
 
-        newTime = np.arange(self.old_t[0], self.t[-1], self.dt)
+        newTime = np.arange(oldTimeAxis[0], newTimeAxis[-1], self.dt)
 
         if not self.indistinguishableBool:
             Gis_old, G_ii_old, G_si_old, G_ss_old = G_old
@@ -450,7 +450,7 @@ class GreenFunctionStitcher(object):
             timeWidthArray_out, freqWidthArray_out = self.compareWidthArrays(timeWidthArray, timeWidthArray_new, freqWidthArray, freqWidthArray_new)
            
             print("Stitching Green's functions...")
-            G_array_updated, newTimeAxis = self.stitchGreenFunctions(centerTime, centerTime_new, G_array, G_array_new)
+            G_array_updated, newTimeAxis = self.stitchGreenFunctions(centerTime, centerTime_new, G_array, G_array_new, timeAxis, newTimeAxis)
             del G_array_new
             
             A_test = self.makeTestFunction(testOffset, T0, newTimeAxis)
@@ -499,7 +499,7 @@ if __name__ == '__main__':
     #Number of grid points 
     n = 12
     #Time step and spatial step. The spatial step will be adjusted slightly depending on the crystal length
-    dt = 0.5e-2
+    dt = 1e-2
     dz = 0.2e-3
     #Relative tolerance and number of steps for the adaptive step size
     rtol = 1e-4
@@ -544,13 +544,13 @@ if __name__ == '__main__':
 
     #### Green's function parameters ####
     #Define the number of basis functions to be used in the Green's function extraction
-    kmax = 75
+    kmax = 50
 
     # #Define the basis functions (hermite gaussians) to be used in the Green's function extraction
     # T0 = T0p/5
 
     # T0 = 1.288/4
-    T0 = T0p/22
+    T0 = T0p/20
 
     gs = GreenFunctionStitcher(parametersArr, T0p, kmax, debugBool = True)
 
@@ -564,7 +564,6 @@ if __name__ == '__main__':
     A_test_init = gs.makeTestFunction(centerTime[0], T0)
     Ap_0 = gs.gf.Ap_0
     validationBool, initOverlap = gs.validatePropagation(G_array[0], A_test_init, Ap_0, solverObject, validationThreshold, 0, gs.t, centerTime[0], plotBool = True)
-    print("WU\n")
     print("Calculated initial validation overlap: " + str(initOverlap))
     if not validationBool:
         print("Validation failed with threshold of " + str(validationThreshold) + ". Consider increasing the number of basis functions or the time resolution.")
@@ -582,15 +581,4 @@ if __name__ == '__main__':
     # # np.save(saveString, saveArray)
 
 
-        #%%
-
-
-    plt.figure()
-    plt.imshow(np.abs(G_array[0]), extent=[gs.t[0], gs.t[-1], gs.t[0], gs.t[-1]], origin='lower')
-    #vertical line at fuck
-    # plt.vlines(fuck, gs.t[0], gs.t[-1])
-    # plt.hlines(fuck, gs.t[0], gs.t[-1])
-
-    # plt.xlim(-2 + fuck, fuck + 2)
-    # plt.ylim(-2 + fuck, fuck + 2)
-
+    

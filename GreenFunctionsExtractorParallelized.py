@@ -12,6 +12,8 @@ import typeII_beta_5perMgO_LN as betaFunctionTypeII
 import type0_beta_5perMgO_LN as betaFunctionType0
 import timeit
 from multiprocessing import Pool
+#import garbace collector
+import gc
 
 class GreenFunctionsExtractor(object):
 
@@ -144,6 +146,9 @@ class GreenFunctionsExtractor(object):
             p.close()
             p.join()
 
+        #Garbage collect
+        gc.collect()
+
         #Initialize arrays for the time shifted basis functions
         B_cross = np.zeros((kmax, self.timeLen), dtype = complex)
         B_self = np.zeros((kmax, self.timeLen), dtype = complex)
@@ -212,10 +217,13 @@ class GreenFunctionsExtractor(object):
             us, vs, ui, vi, uss, vss, uii,vii, rhoCross, rhoSelf = args
             argsList = [(vi, rhoCross, us), (vii, rhoSelf, uii), (vs, rhoCross, ui), (vss, rhoSelf, uss)]
 
-        with Pool(processes=8) as p:
+        with Pool(processes=4) as p:
             results = p.map(self.parallelG, argsList)
             p.close()
             p.join()
+
+        #Garbage collect
+        gc.collect()
         
         self.debugPrint("Green's functions extracted.")
         return results
@@ -270,7 +278,7 @@ class GreenFunctionsExtractor(object):
         overlapArray = np.zeros((fieldArray.shape[1], 2))
         argslist = [(G_cross, G_self, fieldArray[0, k, :], fieldArray[1, k, :], fieldArray[2, k, :]) for k in range(len(overlapArray))]
 
-        with Pool() as p:
+        with Pool(processes=4) as p:
             results = p.map(self.parallelOverlap, argslist)
             p.close()
             p.join()
