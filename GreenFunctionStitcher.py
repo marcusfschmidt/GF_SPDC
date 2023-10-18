@@ -270,8 +270,8 @@ class GreenFunctionStitcher(object):
 
         stitchTimes = []
         testcount = 0
-        # while testcount < 1:
-        while True:
+        while testcount < 1:
+        # while True:
             gc.collect()
 
             testOffset = centerTime[signalIdlerTestIndex] + self.stitchTimeHelper(lowHighIndex)*width/2
@@ -433,7 +433,7 @@ if __name__ == '__main__':
     # T0 = T0p/5
 
     # T0 = 1.288/4
-    T0 = T0p/5
+    T0 = T0p/20
 
     gs = GreenFunctionStitcher(parametersArr, T0p, kmax, debugBool = True)
     # gs.gf.makePump(gs.gf.solverObject.makeCWInput())
@@ -465,4 +465,10 @@ if __name__ == '__main__':
     # np.save(saveString, saveArray)
 
 
-    
+
+  #%%+
+  
+# plt.figure()
+# plt.imshow(np.abs(G_array[0]), extent=[gs.t[0], gs.t[-1], gs.t[0], gs.t[-1]], origin='lower') 
+# plt.xlim(-8,0)
+# plt.ylim(-2,5)
