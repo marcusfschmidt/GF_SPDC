@@ -622,7 +622,7 @@ if __name__ == '__main__':
     # T0 = T0p/5
 
     # T0 = 1.288/4
-    T0 = T0p/20
+    T0 = T0p/15
 
     gs = GreenFunctionStitcher(parametersArr, T0p, kmax, debugBool = True)
 
