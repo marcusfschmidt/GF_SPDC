@@ -198,7 +198,7 @@ class CoupledModes(object):
     #Make a standard Gaussian pump input in frequency domain
     def makeGaussianInput(self, T0, Toff = 0):
         field = np.zeros_like(self.t, dtype = complex)
-        field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((self.t + Toff)/T0)**(2))
+        field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((self.t + Toff - self.offset)/T0)**(2))
         field = self.fft(field)
         return self.normalizeInput(field)
 
@@ -237,9 +237,9 @@ class CoupledModes(object):
 
     def makeHermiteGaussianBasisFunctions(self, Toff, T0, n, fftBool = True, newTimeAxis = False):
         if type(newTimeAxis) == bool:
-            return self.makeHermiteGaussianBasisFunctionHelper(self.t, Toff, T0, n, fftBool)
+            return self.makeHermiteGaussianBasisFunctionHelper(self.t, Toff - self.offset, T0, n, fftBool)
         else:
-            return self.makeHermiteGaussianBasisFunctionHelper(newTimeAxis, Toff, T0, n, fftBool)
+            return self.makeHermiteGaussianBasisFunctionHelper(newTimeAxis, Toff - self.offset, T0, n, fftBool)
 
      
             

@@ -217,7 +217,8 @@ class GreenFunctionsExtractor(object):
             us, vs, ui, vi, uss, vss, uii,vii, rhoCross, rhoSelf = args
             argsList = [(vi, rhoCross, us), (vii, rhoSelf, uii), (vs, rhoCross, ui), (vss, rhoSelf, uss)]
 
-        with Pool(processes=4) as p:
+        with Pool() as p:
+        # with Pool(processes=4) as p:
             results = p.map(self.parallelG, argsList)
             p.close()
             p.join()
@@ -278,7 +279,8 @@ class GreenFunctionsExtractor(object):
         overlapArray = np.zeros((fieldArray.shape[1], 2))
         argslist = [(G_cross, G_self, fieldArray[0, k, :], fieldArray[1, k, :], fieldArray[2, k, :]) for k in range(len(overlapArray))]
 
-        with Pool(processes=3) as p:
+        with Pool() as p:
+        # with Pool(processes=3) as p:
             results = p.map(self.parallelOverlap, argslist)
             p.close()
             p.join()
