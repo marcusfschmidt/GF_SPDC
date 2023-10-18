@@ -353,9 +353,9 @@ class GreenFunctionStitcher(object):
             gc.collect()
 
             testOffset = centerTime[signalIdlerTestIndex] + self.stitchTimeHelper(lowHighIndex)*width/2
-            if testOffset < self.t[0] or testOffset > self.t[-1]:
-                print("Offset exceeds time axis, stitching complete. Inspect the output to determine if the time window should be extended.")
-                break
+            # if testOffset < self.t[0] or testOffset > self.t[-1]:
+            #     print("Offset exceeds time axis, stitching complete. Inspect the output to determine if the time window should be extended.")
+            #     break
 
             timeAxis = self.t
             A_test = self.makeTestFunction(testOffset, T0, newTimeAxis=timeAxis)
@@ -396,31 +396,31 @@ class GreenFunctionStitcher(object):
                 if stitchMoveBool:
                     # plt.figure()
                     offsetTimeAxis = self.t
-                    A_stitchTestOld = self.makeTestFunction(stitchTime, T0, newTimeAxis = timeAxis)
-                    A_stitchTestNew = self.makeTestFunction(stitchTime, T0, newTimeAxis = offsetTimeAxis)
+                    A_stitchTestOld = self.makeTestFunction(stitchTime - timeAxisOffset, T0, newTimeAxis = timeAxis)
+                    A_stitchTestNew = self.makeTestFunction(stitchTime - timeAxisOffset, T0, newTimeAxis = offsetTimeAxis)
                     Ap_new = self.gf.Ap_0
                     newSolverObject = self.gf.solverObject
 
                     A_test = A_stitchTestNew
 
-                    # plt.title("new G")
-                    # plt.imshow(np.abs(G_array_new[0]), extent=[self.t[0], self.t[-1], self.t[0], self.t[-1]], origin='lower')
-                    # #plot vlines of the centertimes
+                    plt.title("new G")
+                    plt.imshow(np.abs(G_array_new[0]), extent=[self.t[0], self.t[-1], self.t[0], self.t[-1]], origin='lower')
+                    #plot vlines of the centertimes
+                    plt.vlines(-centerTime_new[signalIdlerTestIndex], self.t[0], self.t[-1])
+                    plt.vlines(-centerTime[signalIdlerTestIndex], self.t[0], self.t[-1])
+
+
+                    #w the old Green function with alpha = 0.5 and old timeAxis
+                    plt.imshow(np.abs(G_array[0]), extent=[timeAxis[0], timeAxis[-1], timeAxis[0], timeAxis[-1]], origin='lower', alpha=0.5)
+                    plt.xlim(-8,0)
+                    plt.ylim(-2,5)
+                    plt.plot(offsetTimeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestNew)))
+                    plt.plot(timeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestOld)))
+                    plt.vlines(-stitchTime, self.t[0], self.t[-1])
                     # plt.vlines(-centerTime_new[signalIdlerTestIndex], self.t[0], self.t[-1])
                     # plt.vlines(-centerTime[signalIdlerTestIndex], self.t[0], self.t[-1])
-
-
-                    # #w the old Green function with alpha = 0.5 and old timeAxis
-                    # plt.imshow(np.abs(G_array[0]), extent=[timeAxis[0], timeAxis[-1], timeAxis[0], timeAxis[-1]], origin='lower', alpha=0.5)
-                    # plt.xlim(-8,0)
-                    # plt.ylim(-2,5)
-                    # plt.plot(offsetTimeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestNew)))
-                    # plt.plot(timeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestOld)))
-                    # plt.vlines(-stitchTime, self.t[0], self.t[-1])
-                    # # plt.vlines(-centerTime_new[signalIdlerTestIndex], self.t[0], self.t[-1])
-                    # # plt.vlines(-centerTime[signalIdlerTestIndex], self.t[0], self.t[-1])
-                    # plt.show(block=False)
-                    # plt.pause(0.001)
+                    plt.show(block=False)
+                    plt.pause(0.001)
                     print("Stitching point moved, edge region redefined as center of new Green's functions. Continuing...")
                     break
 
@@ -446,23 +446,23 @@ class GreenFunctionStitcher(object):
                 # # plt.vlines(-testOffset, self.t[0], self.t[-1])
                 # plt.vlines(-centerTime_new[signalIdlerTestIndex], self.t[0], self.t[-1])
                 # plt.vlines(-centerTime[signalIdlerTestIndex], self.t[0], self.t[-1])
-                # plt.show(block=False)
+                plt.show(block=False)
                 plt.pause(0.001)
  
-                plt.figure()
-                plt.title("new G")
-                plt.imshow(np.abs(G_array[0]), extent=[timeAxis[0], timeAxis[-1], timeAxis[0], timeAxis[-1]], origin='lower')
-                #show the old Green function with alpha = 0.5 and old timeAxis
-                # plt.imshow(np.abs(G_array[0]), extent=[timeAxis[0], timeAxis[-1], timeAxis[0], timeAxis[-1]], origin='lower', alpha=0.5)
-                plt.xlim(-8,0)
-                plt.ylim(-2,5)
-                # plt.plot(offsetTimeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestNew)))
-                # plt.plot(timeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestOld)))
-                # # plt.vlines(-testOffset, self.t[0], self.t[-1])
-                # plt.vlines(-centerTime_new[signalIdlerTestIndex], self.t[0], self.t[-1])
-                # plt.vlines(-centerTime[signalIdlerTestIndex], self.t[0], self.t[-1])
-                # plt.show(block=False)
-                plt.pause(0.001)
+                # plt.figure()
+                # plt.title("new G")
+                # plt.imshow(np.abs(G_array[0]), extent=[timeAxis[0], timeAxis[-1], timeAxis[0], timeAxis[-1]], origin='lower')
+                # #show the old Green function with alpha = 0.5 and old timeAxis
+                # # plt.imshow(np.abs(G_array[0]), extent=[timeAxis[0], timeAxis[-1], timeAxis[0], timeAxis[-1]], origin='lower', alpha=0.5)
+                # plt.xlim(-8,0)
+                # plt.ylim(-2,5)
+                # # plt.plot(offsetTimeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestNew)))
+                # # plt.plot(timeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestOld)))
+                # # # plt.vlines(-testOffset, self.t[0], self.t[-1])
+                # # plt.vlines(-centerTime_new[signalIdlerTestIndex], self.t[0], self.t[-1])
+                # # plt.vlines(-centerTime[signalIdlerTestIndex], self.t[0], self.t[-1])
+                # # plt.show(block=False)
+                # plt.pause(0.001)
   
   
                 # ###########################################################s
@@ -471,7 +471,7 @@ class GreenFunctionStitcher(object):
                 ### problems here, very low overlap for the old. 
                 ### the basis function offsets fed to the extract green functions fucks up when another offset is added to the time axis. so I need to adjust the widthOffsetfromglobalcenter variable
                 _, stitchOverlapOld = self.validatePropagation(G_array[testIndex], A_stitchTestOld, Ap, solverObject, validationThreshold, signalIdlerTestIndex, timeAxis, stitchTime, plotBool=False)
-                _, stitchOverlapNew = self.validatePropagation(G_array_new[testIndex], A_stitchTestNew, Ap_new, newSolverObject, validationThreshold, signalIdlerTestIndex, offsetTimeAxis, stitchTime - timeAxisOffset, plotBool=True)
+                _, stitchOverlapNew = self.validatePropagation(G_array_new[testIndex], A_stitchTestNew, Ap_new, newSolverObject, validationThreshold, signalIdlerTestIndex, offsetTimeAxis, stitchTime - timeAxisOffset, plotBool=False)
                 # plt.figure()
                 # plt.title("old G")
                 # plt.imshow(np.abs(G_array[0]), extent=[self.t[0], self.t[-1], self.t[0], self.t[-1]], origin='lower')
@@ -498,11 +498,11 @@ class GreenFunctionStitcher(object):
                 print("")
                 print("overlaps old and new at stitching point: " + str(stitchOverlapOld) + ", " + str(stitchOverlapNew))
                 print("")
-
+                
                 
                 #if the difference between old and new stitch overlaps is within 3%, break the loop
 
-                if abs(stitchOverlapNew - stitchOverlapOld) < 0.001:
+                if abs(stitchOverlapNew - stitchOverlapOld) < 0.01:
                     print("New Green's function provides a decent solution at the stitching point, continuing.")
                     break
                 
@@ -527,15 +527,15 @@ class GreenFunctionStitcher(object):
 
             # _, overlap_new = self.validatePropagation(G_array_updated[testIndex], A_test, Ap, newSolverObject, validationThreshold, signalIdlerTestIndex, extendedTimeAxis, testOffset, plotBool=True)
             gs.gf.debugPrint("New validation overlap at edge of region: " + str(overlap_new))
-            # t = extendedTimeAxis
-            # plt.figure()
-            # plt.title("Second test, stitching moved: " + str(stitchMoveBool))
-            # plt.imshow(np.abs(G_array_updated[0]), extent=[t[0], t[-1], t[0], t[-1]], origin='lower')
-            # plt.xlim(-8,0)
-            # plt.ylim(-2,5)
-            # plt.plot(offsetTimeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestNew)))
-            # plt.show(block=False)
-            # plt.pause(0.001)
+            t = extendedTimeAxis
+            plt.figure()
+            plt.title("Second test, stitching moved: " + str(stitchMoveBool))
+            plt.imshow(np.abs(G_array_updated[0]), extent=[t[0], t[-1], t[0], t[-1]], origin='lower')
+            plt.xlim(-8,0)
+            plt.ylim(-2,5)
+            plt.plot(offsetTimeAxis, np.abs(self.gf.solverObject.ifft(A_stitchTestNew)))
+            plt.show(block=False)
+            plt.pause(0.001)
 
 
             if overlap_new < 0.025:
@@ -571,7 +571,7 @@ if __name__ == '__main__':
     #Number of grid points 
     n = 12
     #Time step and spatial step. The spatial step will be adjusted slightly depending on the crystal length
-    dt = 1e-2
+    dt = 1e-3
     dz = 0.2e-3
     #Relative tolerance and number of steps for the adaptive step size
     rtol = 1e-4
@@ -597,11 +597,11 @@ if __name__ == '__main__':
     L = 4000e-6
 
     # Define the beta function for type II phase matching
-    beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
+    # beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
 
     # Define the beta function for type 0 phase matching
-    # QPMPeriod = 5.916450343734758e-6
-    # beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
+    QPMPeriod = 5.916450343734758e-6
+    beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
 
     #Nonlinear coefficient
     gamma = 1e-6
@@ -616,13 +616,13 @@ if __name__ == '__main__':
 
     #### Green's function parameters ####
     #Define the number of basis functions to be used in the Green's function extraction
-    kmax = 50
+    kmax = 100
 
     # #Define the basis functions (hermite gaussians) to be used in the Green's function extraction
     # T0 = T0p/5
 
     # T0 = 1.288/4
-    T0 = T0p/15
+    T0 = T0p/25
 
     gs = GreenFunctionStitcher(parametersArr, T0p, kmax, debugBool = True)
 
