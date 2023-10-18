@@ -416,7 +416,7 @@ if __name__ == "__main__":
     omega_s = -(om_p - om_s)
     omega_i = -(om_p - om_i)
     #Define the parameters array for the solver
-    inputOffset = 5
+    inputOffset = 15
     parametersArr = np.array([n, dt, dz, inputOffset, L, beta, gamma, lambda_p, omega_s, omega_i, alpha_s, alpha_i, printBool, rtol, nsteps])
     #### Green's function parameters ####
     #Define the number of basis functions to be used in the Green's function extraction
@@ -436,12 +436,18 @@ if __name__ == "__main__":
     T0 = T0p/20
 
     #Define the basis functions (hermite gaussians) to be used in the Green's function extraction
-    gf.makeBasisFunctions(T0, 0)
-    # G_array, overlaps, schmidtNumbers = gf.runExtractor(indistinguishableBool, checkBool)
+    gf.makeBasisFunctions(T0, 10)
+    G_array, overlaps, schmidtNumbers = gf.runExtractor(indistinguishableBool, checkBool)
 
+    print(np.mean(np.abs(G_array[0]))**2)
+
+    #%%
+    Pt = np.abs(gf.solverObject.ifft(gf.Ap_0))**2
+    Pt_max = np.max(Pt)
+    Pt = Pt/Pt_max
     plt.figure()
-    # plt.imshow(np.abs(G_array[0]), extent=[gf.t[0], gf.t[-1], gf.t[0], gf.t[-1]], origin='lower')
-    plt.plot(gf.t, np.abs(gf.solverObject.ifft(gf.Ap_0))**2)
+    plt.imshow(np.abs(G_array[0]), extent=[gf.t[0], gf.t[-1], gf.t[0], gf.t[-1]], origin='lower')
+    plt.plot(gf.t, Pt)
     # plt.xlim(-4, 4)
     # plt.ylim(-2, 5)
 
