@@ -1,7 +1,9 @@
 #%%
 #reload all module
-import sys
+import SPDCNumerical_CPU as SPDCNumerical
 import importlib
+importlib.reload(SPDCNumerical)
+import sys
 import scipy as sp
 from math import factorial
 import numpy as np
@@ -360,83 +362,91 @@ class GreenFunctionsExtractor(object):
 
             
 
-# if __name__ == "__main__":
-#     ###################################################
-#     ###### CME parameters ######  
-#     #Number of grid points 
-#     n = 13
-#     #Time step and spatial step. The spatial step will be adjusted slightly depending on the crystal length
-#     dt = 0.002
-#     dz = 0.2e-3
-#     #Relative tolerance and number of steps for the adaptive step size
-#     rtol = 1e-3
-#     nsteps = 10000
-#     #Print the progress of the solver
-#     printBool = False
+if __name__ == "__main__":
+    ###################################################
+    ###### CME parameters ######  
+    #Number of grid points 
+    n = 12
+    #Time step and spatial step. The spatial step will be adjusted slightly depending on the crystal length
+    dt = 1e-2
+    dz = 0.2e-3
+    #Relative tolerance and number of steps for the adaptive step size
+    rtol = 1e-3
+    nsteps = 10000
+    #Print the progress of the solver
+    printBool = False
 
-#     #Pump and signal wavelengths
-#     lambda_p = 532e-9
-#     lambda_s = 1064e-9
-#     #Calculate the idler wavelength from energy conservation
-#     c = 299792458e-12
-#     om_p = 2*np.pi*c/lambda_p
-#     om_s = 2*np.pi*c/lambda_s
-#     om_i = om_p - om_s
-#     lambda_i = 2*np.pi*c/om_i
+    #Pump and signal wavelengths
+    lambda_p = 532e-9
+    lambda_s = 1064e-9
+    #Calculate the idler wavelength from energy conservation
+    c = 299792458e-12
+    om_p = 2*np.pi*c/lambda_p
+    om_s = 2*np.pi*c/lambda_s
+    om_i = om_p - om_s
+    lambda_i = 2*np.pi*c/om_i
 
-#     #Attenuation coefficients (i.e. dA ~ -alpha*A)
-#     #For QPM on, they must be identical.
-#     alpha_s = 0
-#     alpha_i = alpha_s
+    #Attenuation coefficients (i.e. dA ~ -alpha*A)
+    #For QPM on, they must be identical.
+    alpha_s = 0
+    alpha_i = alpha_s
 
-#     #Crystal length
-#     L = 4000e-6
+    #Crystal length
+    L = 4000e-6
 
-#     # # Define the beta function for type II phase matching
-#     # beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
+    # # Define the beta function for type II phase matching
+    # beta = betaFunctionTypeII.typeII(lambda_s, lambda_i, lambda_p)
 
-#     # Define the beta function for type 0 phase matching
-#     QPMPeriod = 5.916450343734758e-6
-#     beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
+    # Define the beta function for type 0 phase matching
+    QPMPeriod = 5.916450343734758e-6
+    beta = betaFunctionType0.type0(lambda_s, lambda_i, lambda_p, ordinaryAxisBool=True, temperature=36, QPMPeriod=QPMPeriod)
     
 
-#     #Booleans for QPM and indistinguishability. Must be defined in the beta class
-#     QPMbool = beta.QPMbool
-#     indistinguishableBool = beta.indistinguishableBool
+    #Booleans for QPM and indistinguishability. Must be defined in the beta class
+    QPMbool = beta.QPMbool
+    indistinguishableBool = beta.indistinguishableBool
 
 
-#     #Nonlinear coefficient
-#     gamma = 1e-5
-#     #Pump pulse duration in ps
-#     T0p = 2
+    #Nonlinear coefficient
+    gamma = 1e-5
+    #Pump pulse duration in ps
+    T0p = 2
 
-#     #Define numerical frequencies
-#     omega_s = -(om_p - om_s)
-#     omega_i = -(om_p - om_i)
-#     #Define the parameters array for the solver
-#     parametersArr = np.array([n, dt, dz, L, beta, gamma, lambda_p, omega_s, omega_i, alpha_s, alpha_i, QPMbool, printBool, rtol, nsteps])
-
-#     #### Green's function parameters ####
-#     #Define the number of basis functions to be used in the Green's function extraction
-#     kmax = 50
-#     jmax = kmax
+    #Define numerical frequencies
+    omega_s = -(om_p - om_s)
+    omega_i = -(om_p - om_i)
+    #Define the parameters array for the solver
+    inputOffset = 5
+    parametersArr = np.array([n, dt, dz, inputOffset, L, beta, gamma, lambda_p, omega_s, omega_i, alpha_s, alpha_i, printBool, rtol, nsteps])
+    #### Green's function parameters ####
+    #Define the number of basis functions to be used in the Green's function extraction
+    kmax = 30
    
-#     #Check the photon number and overlap of the Green's functions
-#     checkBool = False
-#     ###################################################
+    #Check the photon number and overlap of the Green's functions
+    checkBool = False
+    ###################################################
 
-#     # Make the Green's function extractor object
-#     gf = GreenFunctionsExtractor(kmax, jmax, 3.7586/2)
-#     # Make the solver object and pump field
-#     gf.makeSolverParameters(parametersArr)
-#     gf.makePump(gf.solverObject.makeGaussianInput(T0p))
+    # Make the Green's function extractor object
+    gf = GreenFunctionsExtractor(kmax)
+    # Make the solver object and pump field
+    
+    cnlse = SPDCNumerical.CoupledModes(*parametersArr)
+    gf.makeSolverParameters(parametersArr, cnlse)
+    gf.makePump(gf.solverObject.makeGaussianInput(T0p))
+    T0 = T0p/20
 
-#     #k 150 and divide by 11.5 is ok
+    #Define the basis functions (hermite gaussians) to be used in the Green's function extraction
+    gf.makeBasisFunctions(T0, 0)
+    # G_array, overlaps, schmidtNumbers = gf.runExtractor(indistinguishableBool, checkBool)
 
-#     #Define the basis functions (hermite gaussians) to be used in the Green's function extraction
-#     T0pArr = np.array([T0p/11.5*(-k*(0/kmax) + 1) for k in range((kmax))])
-#     gf.makeBasisFunctions(T0pArr)
-#     G_array, overlaps, schmidtNumbers = gf.runExtractor(indistinguishableBool, checkBool)
+    plt.figure()
+    # plt.imshow(np.abs(G_array[0]), extent=[gf.t[0], gf.t[-1], gf.t[0], gf.t[-1]], origin='lower')
+    plt.plot(gf.t, np.abs(gf.solverObject.ifft(gf.Ap_0))**2)
+    # plt.xlim(-4, 4)
+    # plt.ylim(-2, 5)
+
+#%%
+
 
 
 #     if indistinguishableBool:

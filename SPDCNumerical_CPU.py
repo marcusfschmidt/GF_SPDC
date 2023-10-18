@@ -15,7 +15,7 @@ import timeit
 
 class CoupledModes(object):
 
-    def __init__(self, n, dt, dz, L, beta, gamma, lambda_p, omega_s = 0, omega_i = 0, alpha_s = 0, alpha_i = 0, printBool = False, rtol = 1e-3, nsteps = 10000) -> None:
+    def __init__(self, n, dt, dz, inputOffset, L, beta, gamma, lambda_p, omega_s = 0, omega_i = 0, alpha_s = 0, alpha_i = 0, printBool = False, rtol = 1e-3, nsteps = 10000) -> None:
 
         """
         n: number of points in the grid
@@ -38,6 +38,7 @@ class CoupledModes(object):
         self.N = 2**int(n)
         self.dt = dt
         self.dz = dz
+        self.inputOffset = inputOffset
         self.L = L
         self.beta = beta
         self.gamma = gamma
@@ -61,7 +62,7 @@ class CoupledModes(object):
         self.hbar = 1.054571817*1e-34*1e12
 
         #Make axes
-        self.t = np.arange(-self.N/2, self.N/2)*self.dt
+        self.t = np.arange(-self.N/2, self.N/2)*self.dt + inputOffset
         self.domega = 2*np.pi/(self.N*self.dt)
         self.omega = np.arange(-self.N/2, self.N/2)*self.domega
 
@@ -190,14 +191,17 @@ class CoupledModes(object):
     #Input types begin
 
     def normalizeInput(self, field):
-        norm = np.sum(field)*self.domega
-        return field/norm
+        # norm = np.sum(field)*self.domega
+        norm = np.sum(np.abs(field)**2)*self.domega
+        # return field/norm
+        return field/np.sqrt(norm)
 
     #Make a standard Gaussian pump input in frequency domain
     def makeGaussianInput(self, T0, Toff = 0):
         field = np.zeros_like(self.t, dtype = complex)
         field += 1/(T0*np.sqrt(2*np.pi))*np.exp(-4*np.log(2)*((self.t + Toff)/T0)**(2))
         field = self.fft(field)
+        # return field
         return self.normalizeInput(field)
 
     #sech input
