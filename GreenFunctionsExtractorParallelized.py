@@ -138,6 +138,7 @@ class GreenFunctionsExtractor(object):
         args_list = [(k, basisIndex, self.A_basis, A_noise, Ap_0, outIdx, inIdx, self.parametersArray) for k in range(kmax)]
 
         #Parallel processing
+        # pool = Pool(processes=4)
         pool = Pool()
         with pool as p:
             results = p.map(self.parallelExtract, args_list)
