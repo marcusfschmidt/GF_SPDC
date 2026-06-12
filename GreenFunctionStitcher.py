@@ -6,10 +6,9 @@ from typing import Sequence
 
 import numpy as np
 
-import type0_beta_5perMgO_LN as beta_function_type0
-import typeII_beta_5perMgO_LN as beta_function_type_ii
+from gf_spdc.mgo_lithium_niobate_type0_beta import MgOLithiumNiobateType0
+from gf_spdc.type2_beta import Type2
 from gf_spdc.stitcher import ExtractionResult, GreenFunctionStitcher as _GreenFunctionStitcher
-from gf_spdc.solver import BetaModel, TaylorBeta
 
 
 class GreenFunctionStitcher(_GreenFunctionStitcher):
@@ -52,17 +51,17 @@ def main() -> None:
     length = 4000e-6
 
     # Define the beta function for type II phase matching.
-    beta_type_ii = beta_function_type_ii.typeII(lambda_s, lambda_i, lambda_p)
+    beta_type_ii = Type2(lambda_s, lambda_i, lambda_p)
 
     # Define the beta function for type 0 phase matching.
     qpm_period = 5.916450343734758e-6
-    beta = beta_function_type0.type0(
+    beta = MgOLithiumNiobateType0(
         lambda_s,
         lambda_i,
         lambda_p,
-        ordinaryAxisBool=True,
+        ordinary_axis_bool=True,
         temperature=36,
-        QPMPeriod=qpm_period,
+        qpm_period=qpm_period,
     )
 
     # phys: The type-II beta object remains here as a scratch variable for manual experiments.

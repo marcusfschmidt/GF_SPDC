@@ -7,8 +7,8 @@ from numpy.typing import NDArray
 FloatArray = NDArray[np.float64]
 
 
-class Type0:
-    """Wave-vector model for type-0 phase matching in 5% MgO:LiNbO3."""
+class MgOLithiumNiobateType0:
+    """Type-0 phase-matching model for 5% MgO:LiNbO3."""
 
     def __init__(
         self,
@@ -19,7 +19,6 @@ class Type0:
         temperature: float,
         qpm_period: float,
     ) -> None:
-        # Speed of light in m/ps.
         c = 299792458e-12
 
         wavelength_array = np.array([lambda_p, lambda_s, lambda_i], dtype=float) * 1e6
@@ -30,14 +29,12 @@ class Type0:
         self.om = 2 * np.pi * c / wavelength_grid * 1e6
 
         f_term = (temperature - 24.5) * (temperature + 570.82)
-
         if ordinary_axis_bool:
             refractive_index = self.ordinary_axis(wavelength_grid, f_term)
         else:
             refractive_index = self.extraordinary_axis(wavelength_grid, f_term)
 
         beta = 2 * np.pi / wavelength_grid * refractive_index * 1e6
-
         self.kp = beta
         self.ki = beta
         self.ks = beta

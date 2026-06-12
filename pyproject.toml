@@ -37,11 +37,7 @@ pythonVersion = "3.11"
 typeCheckingMode = "standard"
 include = [
     "src",
-    "GreenFunctionsExtractorParallelized.py",
     "GreenFunctionStitcher.py",
-    "SPDCNumerical_CPU.py",
     "loadGreens.py",
-    "type0_beta_5perMgO_LN.py",
-    "typeII_beta_5perMgO_LN.py",
     "tests",
 ]

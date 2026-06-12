@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from gf_spdc.type0_beta import Type0
+from gf_spdc.mgo_lithium_niobate_type0_beta import MgOLithiumNiobateType0
 from gf_spdc.type2_beta import Type2
 
 
 def test_type0_sets_qpm_and_indistinguishable_flags() -> None:
-    model = Type0(1064e-9, 1064e-9, 532e-9, True, 36, 5.9e-6)
+    model = MgOLithiumNiobateType0(1064e-9, 1064e-9, 532e-9, True, 36, 5.9e-6)
     assert model.QPMbool is True
     assert model.indistinguishableBool is True
     assert model.kp.shape == model.ks.shape == model.ki.shape == model.om.shape

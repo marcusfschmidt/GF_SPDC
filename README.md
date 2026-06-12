@@ -25,4 +25,4 @@ uv sync --frozen
 - `src/gf_spdc/`: typed library implementation
 - `GreenFunctionStitcher.py`: script entry point for stitched Green's-function extraction
 - `loadGreens.py`: script entry point for loading and plotting saved Green's functions
-- `SPDCNumerical_CPU.py`, `GreenFunctionsExtractorParallelized.py`, `type0_beta_5perMgO_LN.py`, `typeII_beta_5perMgO_LN.py`: compatibility wrappers
+- `src/gf_spdc/two_photon_absorption.py`: two-photon absorption overlap logic for indistinguishable photons

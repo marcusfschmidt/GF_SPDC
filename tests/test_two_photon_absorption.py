@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from gf_spdc.two_photon_absorption import IndistinguishableTPAInputs, calculate_indistinguishable_tpa_overlap
+from gf_spdc.two_photon_absorption import (
+    _coherent_overlap_contribution,
+    _g2_denominator,
+    _g2_numerator,
+    _incoherent_overlap_contribution_type1,
+    _incoherent_overlap_contribution_type2,
+)
+
+
+def make_inputs() -> IndistinguishableTPAInputs:
+    g = np.array(
+        [
+            [1.0 + 0.0j, 0.1 - 0.2j],
+            [0.05 + 0.3j, 0.8 - 0.1j],
+        ],
+        dtype=complex,
+    )
+    f = np.array(
+        [
+            [0.6 + 0.1j, -0.2 + 0.0j],
+            [0.15 - 0.05j, 0.4 + 0.2j],
+        ],
+        dtype=complex,
+    )
+    omega = np.array([-0.5, 0.5], dtype=float)
+    return IndistinguishableTPAInputs(g=g, f=f, omega=omega, domega=1.0, gamma=2.0)
+
+
+def test_indistinguishable_overlap_uses_three_specified_contributions() -> None:
+    inputs = make_inputs()
+    result = calculate_indistinguishable_tpa_overlap(inputs)
+
+    coherent_expected = _coherent_overlap_contribution(
+        np.conj(inputs.g),
+        np.conj(inputs.f),
+        inputs.g,
+        inputs.f,
+        inputs.omega,
+        inputs.domega,
+        inputs.gamma,
+        inputs.omega_fg,
+    )
+
+    incoherent_type1_expected = _incoherent_overlap_contribution_type1(
+        np.conj(inputs.g),
+        inputs.g,
+        inputs.g,
+        np.conj(inputs.g),
+        inputs.omega,
+        inputs.domega,
+        inputs.gamma,
+        inputs.omega_fg,
+    )
+
+    incoherent_type2_expected = _incoherent_overlap_contribution_type2(
+        np.conj(inputs.g),
+        inputs.g,
+        inputs.g,
+        np.conj(inputs.g),
+        inputs.omega,
+        inputs.domega,
+        inputs.gamma,
+        inputs.omega_fg,
+    )
+
+    np.testing.assert_allclose(result.coherent, coherent_expected)
+    np.testing.assert_allclose(result.incoherent_type1, incoherent_type1_expected)
+    np.testing.assert_allclose(result.incoherent_type2, incoherent_type2_expected)
+    np.testing.assert_allclose(result.total, coherent_expected + incoherent_type1_expected + incoherent_type2_expected)
+
+
+def test_indistinguishable_g2_reduction_matches_expanded_sum() -> None:
+    inputs = make_inputs()
+    result = calculate_indistinguishable_tpa_overlap(inputs)
+
+    single_cross = _g2_numerator(np.conj(inputs.g), np.conj(inputs.f), inputs.g, inputs.f, inputs.domega)
+    single_same = _g2_numerator(np.conj(inputs.g), inputs.g, inputs.g, np.conj(inputs.g), inputs.domega)
+    expanded = single_cross + single_same + single_same
+    denominator = _g2_denominator(inputs.g, inputs.domega) ** 2
+
+    np.testing.assert_allclose(result.g2_numerator, expanded)
+    np.testing.assert_allclose(result.g2_denominator, denominator)
+    np.testing.assert_allclose(result.g2, expanded / denominator)
+
+
+def test_tpa_input_validation_rejects_shape_mismatch() -> None:
+    inputs = make_inputs()
+    with pytest.raises(ValueError):
+        calculate_indistinguishable_tpa_overlap(
+            IndistinguishableTPAInputs(
+                g=inputs.g,
+                f=np.ones((3, 3), dtype=complex),
+                omega=inputs.omega,
+                domega=inputs.domega,
+                gamma=inputs.gamma,
+            )
+        )
+
+
+def test_tpa_input_validation_rejects_non_positive_domega() -> None:
+    inputs = make_inputs()
+    with pytest.raises(ValueError):
+        calculate_indistinguishable_tpa_overlap(
+            IndistinguishableTPAInputs(
+                g=inputs.g,
+                f=inputs.f,
+                omega=inputs.omega,
+                domega=0.0,
+                gamma=inputs.gamma,
+            )
+        )
+
+
+def test_tpa_input_validation_rejects_non_positive_gamma() -> None:
+    inputs = make_inputs()
+    with pytest.raises(ValueError):
+        calculate_indistinguishable_tpa_overlap(
+            IndistinguishableTPAInputs(
+                g=inputs.g,
+                f=inputs.f,
+                omega=inputs.omega,
+                domega=inputs.domega,
+                gamma=0.0,
+            )
+        )
+
+
+def test_tpa_input_validation_rejects_nonuniform_omega_grid() -> None:
+    inputs = make_inputs()
+    with pytest.raises(ValueError):
+        calculate_indistinguishable_tpa_overlap(
+            IndistinguishableTPAInputs(
+                g=inputs.g,
+                f=inputs.f,
+                omega=np.array([-0.5, 0.7], dtype=float),
+                domega=1.0,
+                gamma=inputs.gamma,
+            )
+        )
+
+
+def test_tpa_rejects_singular_g2_denominator() -> None:
+    omega = np.array([-0.5, 0.5], dtype=float)
+    zero_green = np.zeros((2, 2), dtype=complex)
+    with pytest.raises(ValueError):
+        calculate_indistinguishable_tpa_overlap(
+            IndistinguishableTPAInputs(
+                g=zero_green,
+                f=np.eye(2, dtype=complex),
+                omega=omega,
+                domega=1.0,
+                gamma=1.0,
+            )
+        )
