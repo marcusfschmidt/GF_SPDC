@@ -23,11 +23,12 @@ def ifft2_shifted(field: ComplexArray) -> ComplexArray:
 
 
 def add_padding_to_width(widths: NDArray[np.int64] | NDArray[np.float64], padding_factor: float = 0.25) -> NDArray[np.float64]:
-    output = np.asarray(widths, dtype=float).copy()
-    output[0] = output[0] - padding_factor * (output[1] - output[0])
-    output[1] = output[1] + padding_factor * (output[1] - output[0])
-    output[2] = output[2] - padding_factor * (output[3] - output[2])
-    output[3] = output[3] + padding_factor * (output[3] - output[2])
+    x1, x2, y1, y2 = np.asarray(widths, dtype=float)
+    output = np.empty(4, dtype=float)
+    output[0] = x1 - padding_factor * (x2 - x1)
+    output[1] = x2 + padding_factor * (x2 - x1)
+    output[2] = y1 - padding_factor * (y2 - y1)
+    output[3] = y2 + padding_factor * (y2 - y1)
     return output
 
 

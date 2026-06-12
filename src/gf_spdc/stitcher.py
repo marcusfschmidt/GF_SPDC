@@ -105,6 +105,8 @@ class GreenFunctionStitcher:
         non_zero_indices = np.where(values > threshold)
         x_coordinates = non_zero_indices[1]
         y_coordinates = non_zero_indices[0]
+        if x_coordinates.size == 0 or y_coordinates.size == 0:
+            return (0, values.shape[1] - 1, 0, values.shape[0] - 1)
         x1 = int(np.min(x_coordinates))
         x2 = int(np.max(x_coordinates))
         y1 = int(np.min(y_coordinates))
@@ -209,7 +211,7 @@ class GreenFunctionStitcher:
     ) -> tuple[ComplexArray, ComplexArray]:
         abs_diff1 = np.abs(self.t + t1)
         abs_diff2 = np.abs(self.t + t2)
-        condition = abs_diff1 < abs_diff2
+        condition = (abs_diff1 < abs_diff2)[np.newaxis, :]
         return np.where(condition, g1, g2), np.where(condition, f1, f2)
 
     def compare_width_arrays_helper_function(self, array1: WidthTuple, array2: WidthTuple) -> WidthTuple:

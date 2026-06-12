@@ -30,7 +30,7 @@ TaylorBeta = Sequence[Sequence[float]]
 
 
 def _is_beta_model(value: object) -> bool:
-    return all(hasattr(value, attr) for attr in ("QPMbool", "QPMPeriod", "indistinguishableBool", "kp", "ks", "ki", "om"))
+    return all(hasattr(value, attr) for attr in ("QPMbool", "indistinguishableBool", "kp", "ks", "ki", "om"))
 
 
 class CoupledModes:
@@ -66,7 +66,7 @@ class CoupledModes:
         self.QPMPeriod = 0.0
         self.QPM_bool = bool(cast(BetaModel, beta).QPMbool) if _is_beta_model(beta) else False
         if self.QPM_bool:
-            self.QPMPeriod = float(cast(BetaModel, beta).QPMPeriod)
+            self.QPMPeriod = float(getattr(cast(BetaModel, beta), "QPMPeriod", 0.0))
 
         self.solver = ode(self.ode_nl)
         self.solver.set_integrator("dopri5", rtol=rtol, nsteps=nsteps)

@@ -13,7 +13,13 @@ def test_fft_round_trip() -> None:
 
 def test_add_padding_to_width_expands_bounds() -> None:
     padded = add_padding_to_width(np.array([10, 20, 30, 40]), 0.25)
-    np.testing.assert_allclose(padded, np.array([7.5, 23.125, 27.5, 43.125]))
+    np.testing.assert_allclose(padded, np.array([7.5, 22.5, 27.5, 42.5]))
+
+
+def test_add_padding_to_width_preserves_center() -> None:
+    padded = add_padding_to_width(np.array([8.0, 12.0, 18.0, 22.0]), 0.5)
+    assert padded[0] + padded[1] == 20.0
+    assert padded[2] + padded[3] == 40.0
 
 
 def test_remove_zero_values_slices_consistently() -> None:

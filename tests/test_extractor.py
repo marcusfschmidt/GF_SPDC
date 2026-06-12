@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from gf_spdc.extractor import GreenFunctionsExtractor
+from gf_spdc.extractor import GreenFunctionsExtractor, _parallel_green
 
 
 def make_extractor(dt: float = 0.5) -> GreenFunctionsExtractor:
@@ -40,3 +40,13 @@ def test_calculate_green_overlap_returns_expected_shape_for_identity_kernel() ->
     overlaps = extractor.calculate_green_overlap(g_cross, g_self, field_array)
     assert overlaps.shape == (2, 2)
     np.testing.assert_allclose(overlaps, np.ones((2, 2)))
+
+
+def test_parallel_green_matches_explicit_mode_sum() -> None:
+    v_modes = np.array([[1 + 1j, 2 - 1j], [0.5 + 0j, -1j]], dtype=complex)
+    u_modes = np.array([[2 - 1j, 0.5 + 0.5j], [1 + 0j, -2j]], dtype=complex)
+    rho_values = np.array([0.5, 1.5], dtype=float)
+
+    result = _parallel_green((v_modes, rho_values, u_modes))
+    expected = sum(rho_values[index] * np.outer(v_modes[index], np.conjugate(u_modes[index])) for index in range(2))
+    np.testing.assert_allclose(result, expected)
