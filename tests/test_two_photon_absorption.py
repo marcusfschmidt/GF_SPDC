@@ -13,6 +13,137 @@ from gf_spdc.two_photon_absorption import (
 )
 
 
+def _coherent_overlap_contribution_reference(
+    f1g1: np.ndarray,
+    f1g2: np.ndarray,
+    f2g1: np.ndarray,
+    f2g2: np.ndarray,
+    omega: np.ndarray,
+    domega: float,
+    gamma: float,
+    omega_fg: float,
+) -> float:
+    alpha = gamma - 1j * omega_fg
+    f1 = np.asarray((f1g2 @ np.transpose(f1g1)) * domega, dtype=complex)
+    f1 = np.fliplr(f1)
+    f2 = np.asarray((f2g2 @ np.transpose(f2g1)) * domega, dtype=complex)
+    f2 = np.fliplr(f2)
+
+    omega_s = np.arange(-len(omega), len(omega), dtype=float) * domega
+    h = np.zeros(2 * len(omega), dtype=complex)
+
+    for ns in range(len(omega)):
+        denominator = alpha + 1j * omega_s[ns]
+        for index in range(ns):
+            h[ns] += f1[ns - index, index] / denominator
+
+    for ns in range(len(omega)):
+        denominator = alpha + 1j * omega_s[ns + len(omega)]
+        for index in range(ns, len(omega)):
+            h[ns + len(omega)] += f1[ns - index, index] / denominator
+
+    h *= domega
+    output = 0j
+    for omega_index in range(len(omega)):
+        for omega_prime_index in range(len(omega)):
+            output += h[omega_index + omega_prime_index] * f2[omega_index, omega_prime_index]
+    output *= domega**2
+    return float(np.real(output))
+
+
+def _incoherent_overlap_contribution_type1_reference(
+    f1g1: np.ndarray,
+    f1g2: np.ndarray,
+    f2g1: np.ndarray,
+    f2g2: np.ndarray,
+    omega: np.ndarray,
+    domega: float,
+    gamma: float,
+    omega_fg: float,
+) -> float:
+    alpha = gamma - 1j * omega_fg
+    f1 = np.asarray((f1g2 @ np.transpose(f1g1)) * domega, dtype=complex)
+    f1 = np.fliplr(f1)
+    f2 = np.asarray((f2g2 @ np.transpose(f2g1)) * domega, dtype=complex)
+    f2 = np.fliplr(f2)
+
+    omega_s = np.arange(-len(omega), len(omega), dtype=float) * domega
+    h = np.zeros(2 * len(omega), dtype=complex)
+
+    for ns in reversed(range(len(omega))):
+        for index in range(len(omega) - ns, len(omega)):
+            h[2 * len(omega) - ns - 1] += f1[index + ns - len(omega), index]
+
+    for ns in range(len(omega)):
+        for index in range(len(omega) - ns):
+            h[len(omega) - ns] += f1[ns + index, index]
+
+    h *= domega
+    output = 0j
+    for omega_index in range(len(omega)):
+        for omega_prime_index in range(len(omega)):
+            output += h[omega_index - omega_prime_index + len(omega)] * f2[omega_prime_index, omega_index] / (
+                alpha + 1j * omega_s[omega_index + omega_prime_index]
+            )
+    output *= domega**2
+    return float(np.real(output))
+
+
+def _incoherent_overlap_contribution_type2_reference(
+    f1g1: np.ndarray,
+    f1g2: np.ndarray,
+    f2g1: np.ndarray,
+    f2g2: np.ndarray,
+    omega: np.ndarray,
+    domega: float,
+    gamma: float,
+    omega_fg: float,
+) -> float:
+    alpha = gamma - 1j * omega_fg
+    f1 = np.asarray((f1g2 @ np.transpose(f1g1)) * domega, dtype=complex)
+    f1 = np.fliplr(f1)
+    f2 = np.asarray((f2g2 @ np.transpose(f2g1)) * domega, dtype=complex)
+    f2 = np.fliplr(f2)
+
+    h1 = np.zeros(2 * len(omega), dtype=complex)
+    h2 = np.zeros(2 * len(omega), dtype=complex)
+
+    for ns in range(len(omega)):
+        for index in range(len(omega) - ns):
+            h1[len(omega) - ns] += f1[ns + index, index] / (alpha / 2 + 1j * omega[index])
+
+    for ns in reversed(range(len(omega))):
+        for index in range(len(omega) - ns, len(omega)):
+            h1[2 * len(omega) - ns - 1] += f1[index + ns - len(omega), index] / (alpha / 2 + 1j * omega[index])
+
+    h1 *= domega
+    inv_lambda_1 = 0j
+    for omega_tilde_index in range(len(omega)):
+        for omega_prime_index in range(len(omega)):
+            inv_lambda_1 += h1[omega_tilde_index - omega_prime_index + len(omega)] * f2[omega_tilde_index, omega_prime_index]
+    inv_lambda_1 *= domega**2
+
+    for ns in range(len(omega)):
+        for index in range(len(omega) - ns):
+            h2[len(omega) - ns] += f1[ns + index, index]
+
+    for ns in reversed(range(len(omega))):
+        for index in range(len(omega) - ns, len(omega)):
+            h2[2 * len(omega) - ns - 1] += f1[index + ns - len(omega), index]
+
+    h2 *= domega
+    inv_lambda_2 = 0j
+    for omega_tilde_index in range(len(omega)):
+        for omega_prime_index in range(len(omega)):
+            inv_lambda_2 += h2[omega_tilde_index - omega_prime_index + len(omega)] * f2[omega_tilde_index, omega_prime_index] / (
+                alpha / 2 + 1j * omega[omega_prime_index]
+            )
+    inv_lambda_2 *= domega**2
+
+    lambda_total = 1 / inv_lambda_1 + 1 / inv_lambda_2
+    return float(np.real(1 / lambda_total))
+
+
 def make_inputs() -> IndistinguishableTPAInputs:
     g = np.array(
         [
@@ -87,6 +218,30 @@ def test_indistinguishable_g2_reduction_matches_expanded_sum() -> None:
     np.testing.assert_allclose(result.g2_numerator, expanded)
     np.testing.assert_allclose(result.g2_denominator, denominator)
     np.testing.assert_allclose(result.g2, expanded / denominator)
+
+
+def test_vectorized_overlap_contributions_match_reference_implementation() -> None:
+    rng = np.random.default_rng(7)
+    size = 5
+    g = rng.normal(size=(size, size)) + 1j * rng.normal(size=(size, size))
+    f = rng.normal(size=(size, size)) + 1j * rng.normal(size=(size, size))
+    omega = np.linspace(-2.0, 2.0, size)
+    domega = omega[1] - omega[0]
+    gamma = 1.7
+    omega_fg = -0.4
+
+    np.testing.assert_allclose(
+        _coherent_overlap_contribution(np.conj(g), np.conj(f), g, f, omega, domega, gamma, omega_fg),
+        _coherent_overlap_contribution_reference(np.conj(g), np.conj(f), g, f, omega, domega, gamma, omega_fg),
+    )
+    np.testing.assert_allclose(
+        _incoherent_overlap_contribution_type1(np.conj(g), g, g, np.conj(g), omega, domega, gamma, omega_fg),
+        _incoherent_overlap_contribution_type1_reference(np.conj(g), g, g, np.conj(g), omega, domega, gamma, omega_fg),
+    )
+    np.testing.assert_allclose(
+        _incoherent_overlap_contribution_type2(np.conj(g), g, g, np.conj(g), omega, domega, gamma, omega_fg),
+        _incoherent_overlap_contribution_type2_reference(np.conj(g), g, g, np.conj(g), omega, domega, gamma, omega_fg),
+    )
 
 
 def test_tpa_input_validation_rejects_shape_mismatch() -> None:

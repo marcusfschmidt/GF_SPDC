@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -9,6 +10,7 @@ from numpy.typing import NDArray
 
 ComplexArray = NDArray[Any]
 FloatArray = NDArray[np.float64]
+IntArray = NDArray[np.int_]
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,36 @@ def _pair_matrix(left: ComplexArray, right: ComplexArray, domega: float, flip_lr
     return np.fliplr(matrix) if flip_lr else matrix
 
 
+def _complex_bincount(indices: IntArray, values: ComplexArray, length: int) -> ComplexArray:
+    values_array = np.asarray(values, dtype=complex).ravel()
+    return np.bincount(indices, weights=np.asarray(np.real(values_array), dtype=float), minlength=length) + 1j * np.bincount(
+        indices,
+        weights=np.asarray(np.imag(values_array), dtype=float),
+        minlength=length,
+    )
+
+
+@lru_cache(maxsize=None)
+def _overlap_indices(size: int) -> tuple[IntArray, IntArray, IntArray, IntArray, IntArray, IntArray, IntArray]:
+    rows_raw, cols_raw = np.indices((size, size), dtype=int)
+    rows = np.asarray(rows_raw, dtype=int)
+    cols = np.asarray(cols_raw, dtype=int)
+    coherent_destinations = np.asarray(np.where(rows > 0, rows + cols, size + cols).ravel(), dtype=int)
+    diagonal_destinations = np.asarray(np.where(cols > rows, size + cols - rows - 1, size + cols - rows).ravel(), dtype=int)
+    anti_diagonal_indices = np.asarray(rows + cols, dtype=int)
+    forward_difference_indices = np.asarray(cols - rows + size, dtype=int)
+    backward_difference_indices = np.asarray(rows - cols + size, dtype=int)
+    return (
+        coherent_destinations,
+        diagonal_destinations,
+        anti_diagonal_indices,
+        forward_difference_indices,
+        backward_difference_indices,
+        rows,
+        cols,
+    )
+
+
 def _coherent_overlap_contribution(
     f1g1: ComplexArray,
     f1g2: ComplexArray,
@@ -81,25 +113,12 @@ def _coherent_overlap_contribution(
     f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=True)
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
-    omega_s = np.arange(-len(omega), len(omega), dtype=float) * domega
-    h = np.zeros(2 * len(omega), dtype=complex)
-
-    for ns in range(len(omega)):
-        denominator = alpha + 1j * omega_s[ns]
-        for index in range(ns):
-            h[ns] += f1[ns - index, index] / denominator
-
-    for ns in range(len(omega)):
-        denominator = alpha + 1j * omega_s[ns + len(omega)]
-        for index in range(ns, len(omega)):
-            h[ns + len(omega)] += f1[ns - index, index] / denominator
-
+    size = len(omega)
+    coherent_destinations, _, anti_diagonal_indices, _, _, _, _ = _overlap_indices(size)
+    omega_s = np.arange(-size, size, dtype=float) * domega
+    h = _complex_bincount(coherent_destinations, f1, 2 * size) / (alpha + 1j * omega_s)
     h *= domega
-    output = 0j
-    for omega_index in range(len(omega)):
-        for omega_prime_index in range(len(omega)):
-            output += h[omega_index + omega_prime_index] * f2[omega_index, omega_prime_index]
-    output *= domega**2
+    output = np.sum(h[anti_diagonal_indices] * f2) * domega**2
     return float(np.real(output))
 
 
@@ -117,25 +136,14 @@ def _incoherent_overlap_contribution_type1(
     f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=True)
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
-    omega_s = np.arange(-len(omega), len(omega), dtype=float) * domega
-    h = np.zeros(2 * len(omega), dtype=complex)
-
-    for ns in reversed(range(len(omega))):
-        for index in range(len(omega) - ns, len(omega)):
-            h[2 * len(omega) - ns - 1] += f1[index + ns - len(omega), index]
-
-    for ns in range(len(omega)):
-        for index in range(len(omega) - ns):
-            h[len(omega) - ns] += f1[ns + index, index]
-
+    size = len(omega)
+    _, diagonal_destinations, anti_diagonal_indices, forward_difference_indices, _, _, _ = _overlap_indices(size)
+    omega_s = np.arange(-size, size, dtype=float) * domega
+    h = _complex_bincount(diagonal_destinations, f1, 2 * size)
     h *= domega
-    output = 0j
-    for omega_index in range(len(omega)):
-        for omega_prime_index in range(len(omega)):
-            output += h[omega_index - omega_prime_index + len(omega)] * f2[omega_prime_index, omega_index] / (
-                alpha + 1j * omega_s[omega_index + omega_prime_index]
-            )
-    output *= domega**2
+    output = np.sum(
+        h[forward_difference_indices] * f2 / (alpha + 1j * omega_s[anti_diagonal_indices])
+    ) * domega**2
     return float(np.real(output))
 
 
@@ -153,40 +161,16 @@ def _incoherent_overlap_contribution_type2(
     f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=True)
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
-    h1 = np.zeros(2 * len(omega), dtype=complex)
-    h2 = np.zeros(2 * len(omega), dtype=complex)
-
-    for ns in range(len(omega)):
-        for index in range(len(omega) - ns):
-            h1[len(omega) - ns] += f1[ns + index, index] / (alpha / 2 + 1j * omega[index])
-
-    for ns in reversed(range(len(omega))):
-        for index in range(len(omega) - ns, len(omega)):
-            h1[2 * len(omega) - ns - 1] += f1[index + ns - len(omega), index] / (alpha / 2 + 1j * omega[index])
-
+    size = len(omega)
+    _, diagonal_destinations, _, _, backward_difference_indices, _, _ = _overlap_indices(size)
+    half_alpha_denominator = alpha / 2 + 1j * omega
+    h1 = _complex_bincount(diagonal_destinations, f1 / half_alpha_denominator[np.newaxis, :], 2 * size)
     h1 *= domega
-    inv_lambda_1 = 0j
-    for omega_tilde_index in range(len(omega)):
-        for omega_prime_index in range(len(omega)):
-            inv_lambda_1 += h1[omega_tilde_index - omega_prime_index + len(omega)] * f2[omega_tilde_index, omega_prime_index]
-    inv_lambda_1 *= domega**2
+    inv_lambda_1 = np.sum(h1[backward_difference_indices] * f2) * domega**2
 
-    for ns in range(len(omega)):
-        for index in range(len(omega) - ns):
-            h2[len(omega) - ns] += f1[ns + index, index]
-
-    for ns in reversed(range(len(omega))):
-        for index in range(len(omega) - ns, len(omega)):
-            h2[2 * len(omega) - ns - 1] += f1[index + ns - len(omega), index]
-
+    h2 = _complex_bincount(diagonal_destinations, f1, 2 * size)
     h2 *= domega
-    inv_lambda_2 = 0j
-    for omega_tilde_index in range(len(omega)):
-        for omega_prime_index in range(len(omega)):
-            inv_lambda_2 += h2[omega_tilde_index - omega_prime_index + len(omega)] * f2[omega_tilde_index, omega_prime_index] / (
-                alpha / 2 + 1j * omega[omega_prime_index]
-            )
-    inv_lambda_2 *= domega**2
+    inv_lambda_2 = np.sum(h2[backward_difference_indices] * f2 / half_alpha_denominator[np.newaxis, :]) * domega**2
 
     if np.isclose(inv_lambda_1, 0.0) or np.isclose(inv_lambda_2, 0.0):
         raise ValueError("Incoherent type-2 contribution is singular for the supplied inputs.")
@@ -203,14 +187,14 @@ def _g2_numerator(
     f2g2: ComplexArray,
     domega: float,
 ) -> complex:
-    f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=False)
-    f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=False)
-    return complex(np.sum(f1) * domega**2 * np.sum(f2) * domega**2)
+    f1_sum = np.sum(f1g2, axis=0) @ np.sum(f1g1, axis=0)
+    f2_sum = np.sum(f2g2, axis=0) @ np.sum(f2g1, axis=0)
+    return complex(f1_sum * f2_sum * domega**6)
 
 
 def _g2_denominator(gjj: ComplexArray, domega: float) -> complex:
-    f_matrix = np.asarray((np.conj(gjj) @ np.transpose(gjj)) * domega, dtype=complex)
-    return complex(np.sum(f_matrix) * domega**2)
+    gjj_sum = np.sum(gjj, axis=0)
+    return complex((np.conj(gjj_sum) @ gjj_sum) * domega**3)
 
 
 def calculate_indistinguishable_tpa_overlap(inputs: IndistinguishableTPAInputs) -> TPAContributionBreakdown:
