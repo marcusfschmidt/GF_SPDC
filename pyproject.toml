@@ -1,0 +1,47 @@
+[project]
+name = "gf-spdc"
+version = "0.1.0"
+description = "Green's function extraction tools for SPDC simulations"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+dependencies = [
+    "matplotlib==3.10.3",
+    "numpy==2.3.0",
+    "scipy==1.16.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyright==1.1.402",
+    "pytest==8.4.0",
+]
+
+[build-system]
+requires = ["setuptools>=80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+include = [
+    "src",
+    "GreenFunctionsExtractorParallelized.py",
+    "GreenFunctionStitcher.py",
+    "SPDCNumerical_CPU.py",
+    "loadGreens.py",
+    "type0_beta_5perMgO_LN.py",
+    "typeII_beta_5perMgO_LN.py",
+    "tests",
+]

@@ -1,0 +1,319 @@
+from __future__ import annotations
+
+import time
+from math import factorial
+from typing import Any, Protocol, Sequence, cast
+
+import numpy as np
+import scipy as sp
+from numpy.typing import NDArray
+from scipy import special
+from scipy.integrate import ode
+from scipy.interpolate import InterpolatedUnivariateSpline
+
+
+ComplexArray = NDArray[Any]
+FloatArray = NDArray[np.float64]
+
+
+class BetaModel(Protocol):
+    QPMbool: bool
+    QPMPeriod: float
+    indistinguishableBool: bool
+    kp: FloatArray
+    ks: FloatArray
+    ki: FloatArray
+    om: FloatArray
+
+
+TaylorBeta = Sequence[Sequence[float]]
+
+
+def _is_beta_model(value: object) -> bool:
+    return all(hasattr(value, attr) for attr in ("QPMbool", "QPMPeriod", "indistinguishableBool", "kp", "ks", "ki", "om"))
+
+
+class CoupledModes:
+    def __init__(
+        self,
+        n: int,
+        dt: float,
+        dz: float,
+        length: float,
+        beta: BetaModel | Sequence[Sequence[float]],
+        gamma: float,
+        lambda_p: float,
+        omega_s: float = 0.0,
+        omega_i: float = 0.0,
+        alpha_s: float = 0.0,
+        alpha_i: float = 0.0,
+        print_bool: bool = False,
+        rtol: float = 1e-3,
+        nsteps: int = 10000,
+    ) -> None:
+        self.N = 2 ** int(n)
+        self.dt = dt
+        self.dz = dz
+        self.L = length
+        self.beta = beta
+        self.gamma = gamma
+        self.lambda_p = lambda_p
+        self.alpha_s = alpha_s
+        self.alpha_i = alpha_i
+        self.initial_conditions_flag = False
+        self.print_bool = print_bool
+
+        self.QPMPeriod = 0.0
+        self.QPM_bool = bool(cast(BetaModel, beta).QPMbool) if _is_beta_model(beta) else False
+        if self.QPM_bool:
+            self.QPMPeriod = float(cast(BetaModel, beta).QPMPeriod)
+
+        self.solver = ode(self.ode_nl)
+        self.solver.set_integrator("dopri5", rtol=rtol, nsteps=nsteps)
+
+        self.c = 299792458e-12
+        self.hbar = 1.054571817e-34 * 1e12
+
+        self.t = np.arange(-self.N / 2, self.N / 2, dtype=float) * self.dt
+        self.domega = 2 * np.pi / (self.N * self.dt)
+        self.omega = np.arange(-self.N / 2, self.N / 2, dtype=float) * self.domega
+
+        self.fp = self.c / self.lambda_p
+        self.omega_p = 2 * np.pi * self.fp
+
+        self.omega_real = self.omega + self.omega_p
+        self.omega_s = self.omega_p + omega_s
+        self.omega_i = self.omega_p + omega_i
+        self.omegaRealS = self.omega + self.omega_s
+        self.omegaRealI = self.omega + self.omega_i
+
+        self.lambdaReal = self.c / ((self.omega + self.omega_p) / (2 * np.pi)) * 1e9
+        self.lambdaRealS = self.c / ((self.omega + self.omega_s) / (2 * np.pi)) * 1e9
+        self.lambdaRealI = self.c / ((self.omega + self.omega_i) / (2 * np.pi)) * 1e9
+        self.lamReal = self.lambdaReal
+
+        if self.omega_real[0] < 0:
+            raise ValueError(
+                "Center wavelength too high for the omega-array to be non-negative. "
+                "Try increasing the frequency or increasing dt."
+            )
+
+        self.kp_fit: InterpolatedUnivariateSpline | None = None
+        kp_full: FloatArray
+        ks_full: FloatArray
+        ki_full: FloatArray
+        if _is_beta_model(beta):
+            beta_model = cast(BetaModel, beta)
+            kp = np.asarray(beta_model.kp, dtype=float)
+            ks = np.asarray(beta_model.ks, dtype=float)
+            ki = np.asarray(beta_model.ki, dtype=float)
+            omega_axis = np.asarray(beta_model.om, dtype=float)
+
+            kp_fit = InterpolatedUnivariateSpline(omega_axis, kp)
+            self.kp_fit = kp_fit
+            kp_full = np.asarray(kp_fit(self.omega_real), dtype=float)
+            beta1 = float(cast(Any, kp_fit.derivative()(self.omega_p)))
+            self.beta1 = beta1
+            self.kpFull = kp_full
+
+            ks_fit = InterpolatedUnivariateSpline(omega_axis, ks)
+            ks_full = np.asarray(ks_fit(self.omegaRealS), dtype=float)
+            self.ks = float(cast(Any, ks_fit.derivative()(self.omega_s)))
+            self.ksFull = ks_full
+
+            ki_fit = InterpolatedUnivariateSpline(omega_axis, ki)
+            ki_full = np.asarray(ki_fit(self.omegaRealI), dtype=float)
+            self.ki = float(cast(Any, ki_fit.derivative()(self.omega_i)))
+            self.kiFull = ki_full
+
+            self.k_reference = beta1
+        else:
+            beta_coefficients = cast(TaylorBeta, beta)
+            self.k_reference = float(beta_coefficients[0][1])
+            kp_full = self.make_simple_beta(beta_coefficients[0], expansion_point=self.omega_p)
+            ks_full = self.make_simple_beta(beta_coefficients[1], expansion_point=self.omega_s)
+            self.ks = float(beta_coefficients[1][1])
+            ki_full = self.make_simple_beta(beta_coefficients[2], expansion_point=self.omega_i)
+            self.ki = float(beta_coefficients[2][1])
+
+        self.betap = self.transform_beta(np.asarray(kp_full, dtype=float), self.k_reference, self.omega_real, self.omega_p)
+        self.betas = self.transform_beta(np.asarray(ks_full, dtype=float), self.k_reference, self.omegaRealS, self.omega_s)
+        self.betai = self.transform_beta(np.asarray(ki_full, dtype=float), self.k_reference, self.omegaRealI, self.omega_i)
+
+        time_shift_s = (self.ks - self.k_reference) * self.L
+        time_shift_i = (self.ki - self.k_reference) * self.L
+        self.timeShiftArray = np.array([time_shift_s, time_shift_i], dtype=float)
+
+    def fft(self, field: ComplexArray) -> ComplexArray:
+        return sp.fft.fftshift(sp.fft.fft(sp.fft.ifftshift(field)))
+
+    def ifft(self, field: ComplexArray) -> ComplexArray:
+        return sp.fft.ifftshift(sp.fft.ifft(sp.fft.fftshift(field)))
+
+    def taylor_sum(self, coefficients: Sequence[float], variable: FloatArray) -> FloatArray:
+        output = np.zeros_like(variable, dtype=float)
+        for index, coefficient in enumerate(coefficients):
+            output += coefficient / factorial(index) * variable**index
+        return output
+
+    def find_nearest(self, array: FloatArray, value: float) -> int:
+        return int(np.abs(array - value).argmin())
+
+    def make_simple_beta(self, coefficients: Sequence[float], expansion_point: float) -> FloatArray:
+        frequency = self.omega + self.omega_p
+        return self.taylor_sum(coefficients, frequency - expansion_point)
+
+    def transform_beta(
+        self,
+        beta: FloatArray,
+        beta1: float,
+        frequency: FloatArray,
+        expansion_point: float,
+    ) -> FloatArray:
+        return beta - beta1 * (frequency - expansion_point)
+
+    def normalize_input(self, field: ComplexArray) -> ComplexArray:
+        norm = np.sum(field) * self.domega
+        return field / norm
+
+    def make_gaussian_input(self, t0: float, t_off: float = 0.0) -> ComplexArray:
+        field = np.zeros_like(self.t, dtype=complex)
+        field += 1 / (t0 * np.sqrt(2 * np.pi)) * np.exp(-4 * np.log(2) * ((self.t + t_off) / t0) ** 2)
+        return self.normalize_input(self.fft(field))
+
+    def make_sech_input(self, p0: float, t_off: float, t0: float) -> ComplexArray:
+        field = np.zeros_like(self.t, dtype=complex)
+
+        def inv_acosh(x_axis: FloatArray) -> FloatArray:
+            result = [1 / np.cosh(value) if np.abs(value) < 710.4 else 0 for value in x_axis]
+            return np.array(result, dtype=float)
+
+        argument = (self.t + t_off) / t0
+        field += np.sqrt(p0) * inv_acosh(argument) * np.exp(-1j * (self.t + t_off) ** 2 / (2 * t0**2))
+        return self.normalize_input(self.fft(field))
+
+    def make_cw_input(self, p0: float = 1.0) -> ComplexArray:
+        field = np.zeros_like(self.t, dtype=complex)
+        df = (self.omega[1] - self.omega[0]) / (2 * np.pi)
+        center_index = int(self.N / 2)
+        field[center_index] = np.sqrt(p0 / (2 * np.pi)) / df
+        return self.normalize_input(field)
+
+    def make_hermite_gaussian_basis_functions(
+        self,
+        t_off: float,
+        t0: float,
+        order: int,
+        fft_bool: bool = True,
+    ) -> ComplexArray:
+        field = np.zeros_like(self.t, dtype=complex)
+        field += self.hermite_gaussian_function(order, self.t + t_off, t0)
+        norm = np.sum(np.abs(field) ** 2) * self.dt
+        field = field / np.sqrt(norm)
+        if fft_bool:
+            field = self.fft(field)
+        return field
+
+    def hermite_gaussian_function(self, order: int, t_axis: FloatArray, width: float) -> ComplexArray:
+        return 1 / np.exp(order) * np.exp(-(t_axis**2) / (2 * width**2)) * special.eval_hermite(order, t_axis / width)
+
+    def add_noise(self, field: ComplexArray) -> ComplexArray:
+        df = (self.omega[1] - self.omega[0]) / (2 * np.pi)
+        random_values = np.random.random(field.size)
+        field += np.exp(1j * random_values * 2 * np.pi) * np.sqrt(self.hbar * self.omega_real / df)
+        return field
+
+    def get_pump(self, z: float) -> ComplexArray:
+        return self.Ap_0 * np.exp(1j * self.betap * z)
+
+    def qpm(self, z: float) -> float:
+        if self.QPMPeriod == 0:
+            return 1.0
+        return float(np.sign(np.sin(2 * np.pi / self.QPMPeriod * z)))
+
+    def set_initial_conditions(self, input_fields: ComplexArray) -> None:
+        self.initial_conditions_flag = True
+        self.As_0, self.Ai_0, self.Ap_0 = input_fields
+        initial_values = np.hstack((np.real(self.As_0), np.imag(self.As_0), np.real(self.Ai_0), np.imag(self.Ai_0)))
+        self.solver.set_initial_value(initial_values, 0)
+
+    def save_variables(
+        self,
+        step_index: int,
+        field: NDArray[np.float64],
+    ) -> tuple[float, ComplexArray, ComplexArray]:
+        z = step_index * self.dz
+
+        as_field = (field[0] + 1j * field[1]) * np.exp(1j * self.betas * z)
+        ai_field = (field[2] + 1j * field[3]) * np.exp(1j * self.betai * z)
+
+        field_time = np.zeros((self.N, 2), dtype=complex)
+        field_spec = np.zeros_like(field_time)
+
+        field_time[:, 0] = self.ifft(as_field)
+        field_time[:, 1] = self.ifft(ai_field)
+        field_spec[:, 0] = as_field
+        field_spec[:, 1] = ai_field
+        return z, field_spec, field_time
+
+    def ode_nl(self, z: float, field_interaction: NDArray[np.float64]) -> NDArray[np.float64]:
+        field_interaction = np.reshape(field_interaction, (4, self.N))
+        as_real, as_imag, ai_real, ai_imag = field_interaction
+        as_interaction = as_real + 1j * as_imag
+        ai_interaction = ai_real + 1j * ai_imag
+
+        signal_exponential_factor = 1j * (self.betas + 1j * self.alpha_s) * z
+        idler_exponential_factor = 1j * (self.betai + 1j * self.alpha_i) * z
+
+        as_field = self.ifft(as_interaction * np.exp(signal_exponential_factor))
+        ai_field = self.ifft(ai_interaction * np.exp(idler_exponential_factor))
+        ap_field = self.ifft(self.get_pump(z))
+        qpm = self.qpm(z)
+
+        nas = 1j * self.gamma * np.conjugate(ai_field) * ap_field * qpm
+        nai = 1j * self.gamma * np.conjugate(as_field) * ap_field * qpm
+
+        das = np.exp(-signal_exponential_factor) * self.fft(nas)
+        dai = np.exp(-idler_exponential_factor) * self.fft(nai)
+        return np.hstack((np.real(das), np.imag(das), np.real(dai), np.imag(dai)))
+
+    def run(self) -> tuple[FloatArray, FloatArray, float, FloatArray, ComplexArray, ComplexArray]:
+        if not self.initial_conditions_flag:
+            raise RuntimeError("No initial conditions given.")
+
+        nz_float = self.L / self.dz
+        n_save = int(np.round(nz_float))
+        self.dz = self.L / n_save
+
+        z_out = np.zeros(n_save + 1, dtype=float)
+        field_spec = np.zeros((n_save + 1, self.N, 2), dtype=complex)
+        field_time = np.zeros_like(field_spec)
+
+        fields_0 = np.array([np.real(self.As_0), np.imag(self.As_0), np.real(self.Ai_0), np.imag(self.Ai_0)])
+        z_out[0], field_spec[0, :, :], field_time[0, :, :] = self.save_variables(0, fields_0)
+        start_time = time.time()
+
+        time_left = 0.0
+        for step_index in range(1, n_save + 1):
+            step_start = time.time()
+            if self.print_bool:
+                print("", end="\r")
+                print(
+                    f"Step {step_index} of {n_save + 1}, approximate time left [s]: {np.round(time_left, 2)}",
+                    end="",
+                )
+
+            self.solver.integrate(z_out[step_index - 1] + self.dz)
+            fields = np.reshape(self.solver.y, (4, self.N))
+            z_out[step_index], field_spec[step_index, :, :], field_time[step_index, :, :] = self.save_variables(
+                step_index,
+                fields,
+            )
+            elapsed = time.time() - step_start
+            time_left = (n_save - step_index) * elapsed
+
+        total_time = time.time() - start_time
+        if self.print_bool:
+            print(f"\nSimulation time [s]: {np.round(total_time, 2)}")
+
+        return z_out, self.omega, self.omega_p, self.t, field_spec, field_time

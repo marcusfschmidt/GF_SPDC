@@ -1,2 +1,8 @@
 __pycache__/
 *.npy
+.venv/
+.pytest_cache/
+.pyright/
+dist/
+build/
+*.egg-info/
