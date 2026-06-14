@@ -51,6 +51,7 @@ class CoupledModes:
         print_bool: bool = False,
         rtol: float = 1e-3,
         nsteps: int = 10000,
+        integration_method: str = "rk4",
     ) -> None:
         self.N = 2 ** int(n)
         self.dt = dt
@@ -63,6 +64,9 @@ class CoupledModes:
         self.alpha_i = alpha_i
         self.initial_conditions_flag = False
         self.print_bool = print_bool
+        self.integration_method = integration_method.lower()
+        if self.integration_method not in {"rk4", "adaptive"}:
+            raise ValueError("integration_method must be 'rk4' or 'adaptive'.")
 
         self.QPMPeriod = 0.0
         self.QPM_bool = bool(cast(BetaModel, beta).QPMbool) if isinstance(beta, BETA_MODEL_TYPES) else False
@@ -257,6 +261,13 @@ class CoupledModes:
         field_spec[:, 1] = ai_field
         return z, field_spec, field_time
 
+    def rk4_step(self, z: float, field_interaction: NDArray[np.float64], dz: float) -> NDArray[np.float64]:
+        k1 = self.ode_nl(z, field_interaction)
+        k2 = self.ode_nl(z + 0.5 * dz, field_interaction + 0.5 * dz * k1)
+        k3 = self.ode_nl(z + 0.5 * dz, field_interaction + 0.5 * dz * k2)
+        k4 = self.ode_nl(z + dz, field_interaction + dz * k3)
+        return field_interaction + dz * (k1 + 2 * k2 + 2 * k3 + k4) / 6.0
+
     def ode_nl(self, z: float, field_interaction: NDArray[np.float64]) -> NDArray[np.float64]:
         field_interaction = np.reshape(field_interaction, (4, self.N))
         as_real, as_imag, ai_real, ai_imag = field_interaction
@@ -295,6 +306,8 @@ class CoupledModes:
         start_time = time.time()
 
         time_left = 0.0
+        state = np.hstack((np.real(self.As_0), np.imag(self.As_0), np.real(self.Ai_0), np.imag(self.Ai_0)))
+        z_current = 0.0
         for step_index in range(1, n_save + 1):
             step_start = time.time()
             if self.print_bool:
@@ -304,8 +317,14 @@ class CoupledModes:
                     end="",
                 )
 
-            self.solver.integrate(z_out[step_index - 1] + self.dz)
-            fields = np.reshape(self.solver.y, (4, self.N))
+            if self.integration_method == "adaptive":
+                self.solver.integrate(z_out[step_index - 1] + self.dz)
+                state = self.solver.y
+            else:
+                state = self.rk4_step(z_current, state, self.dz)
+            z_current += self.dz
+
+            fields = np.reshape(state, (4, self.N))
             z_out[step_index], field_spec[step_index, :, :], field_time[step_index, :, :] = self.save_variables(
                 step_index,
                 fields,
