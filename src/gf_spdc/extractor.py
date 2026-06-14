@@ -220,10 +220,10 @@ class GreenFunctionsExtractor:
         return phi, rho_cross, psi, phi_self, rho_self, psi_self, field_time_array, float(cross_time), output_basis
 
     def extract_green_functions(
-        self,
-        args: tuple[Any, ...],
-        indistinguishable_bool: bool,
-    ) -> list[ComplexArray]:
+            self,
+            args: tuple[Any, ...],
+            indistinguishable_bool: bool,
+        ) -> tuple[ComplexArray, ...]:
         self.debug_print("Extracting Green's functions...", end="\n")
         if indistinguishable_bool:
             us, vi, uss, vss, rho_cross, rho_self = args
@@ -235,7 +235,7 @@ class GreenFunctionsExtractor:
         with _make_pool() as pool:
             results = pool.map(_parallel_green, args_list)
         self.debug_print("Green's functions extracted.")
-        return results
+        return tuple(results)
 
     def photon_number(self, cross_green_time: ComplexArray) -> float:
         n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1)
@@ -273,6 +273,7 @@ class GreenFunctionsExtractor:
     ) -> tuple[tuple[ComplexArray, ...], RealArray | None, FloatArray | RealArray | None]:
         overlaps: RealArray | None = None
         schmidt_numbers: FloatArray | RealArray | None = None
+        g_tuple: tuple[ComplexArray, ...] = ()
 
         self.debug_print("\nPropagating signal...", end="\n")
         u_s, idler_rho, v_i, uss, self_rhos, vss, is_time_array, ti, signal_basis = self.extract_schmidt_modes(0)
@@ -283,8 +284,12 @@ class GreenFunctionsExtractor:
             u_i, signal_rho, v_s, uii, self_rho_i, vii, si_time_array, ts, idler_basis = self.extract_schmidt_modes(1)
             self.t_idler_propagated = 2 * ts
 
-            args_list = (u_s, v_s, u_i, v_i, uss, vss, uii, vii, signal_rho, self_rhos)
-            g_is, g_ii, g_si, g_ss = self.extract_green_functions(args_list, indistinguishable_bool)
+            args_tuple_full: tuple[Any, ...] = (u_s, v_s, u_i, v_i, uss, vss, uii, vii, signal_rho, self_rhos)
+            result_full = self.extract_green_functions(args_tuple_full, indistinguishable_bool)
+            g_is = result_full[0]
+            g_ii = result_full[1]
+            g_si = result_full[2]
+            g_ss = result_full[3]
             g_is = np.roll(g_is, round((2 * ts) / self.dt), axis=1)
             g_ss = np.roll(g_ss, round((2 * ts) / self.dt), axis=1)
             g_ii = np.roll(g_ii, round((2 * ti) / self.dt), axis=1)
@@ -306,8 +311,10 @@ class GreenFunctionsExtractor:
                 schmidt_numbers = np.vstack((schmidt_signal, schmidt_idler)).T
                 print("Finished!")
         else:
-            args_list = (u_s, v_i, uss, vss, idler_rho, self_rhos)
-            g_field, f_field = self.extract_green_functions(args_list, indistinguishable_bool)
+            args_tuple_simple: tuple[Any, ...] = (u_s, v_i, uss, vss, idler_rho, self_rhos)
+            result_simple = self.extract_green_functions(args_tuple_simple, indistinguishable_bool)
+            g_field = result_simple[0]
+            f_field = result_simple[1]
             g_field = np.roll(g_field, round((2 * ti) / self.dt), axis=1)
             f_field = np.roll(f_field, round((2 * ti) / self.dt), axis=1)
             g_tuple = (g_field, f_field)

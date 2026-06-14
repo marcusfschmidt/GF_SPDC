@@ -11,6 +11,9 @@ from scipy import special
 from scipy.integrate import ode
 from scipy.interpolate import InterpolatedUnivariateSpline
 
+from .mgo_lithium_niobate_type0_beta import MgOLithiumNiobateType0
+from .mgo_lithium_niobate_type2_beta import MgOLithiumNiobateType2
+
 
 ComplexArray = NDArray[Any]
 FloatArray = NDArray[np.float64]
@@ -28,9 +31,7 @@ class BetaModel(Protocol):
 
 TaylorBeta = Sequence[Sequence[float]]
 
-
-def _is_beta_model(value: object) -> bool:
-    return all(hasattr(value, attr) for attr in ("QPMbool", "indistinguishableBool", "kp", "ks", "ki", "om"))
+BETA_MODEL_TYPES = (MgOLithiumNiobateType2, MgOLithiumNiobateType0)
 
 
 class CoupledModes:
@@ -64,7 +65,7 @@ class CoupledModes:
         self.print_bool = print_bool
 
         self.QPMPeriod = 0.0
-        self.QPM_bool = bool(cast(BetaModel, beta).QPMbool) if _is_beta_model(beta) else False
+        self.QPM_bool = bool(cast(BetaModel, beta).QPMbool) if isinstance(beta, BETA_MODEL_TYPES) else False
         if self.QPM_bool:
             self.QPMPeriod = float(getattr(cast(BetaModel, beta), "QPMPeriod", 0.0))
 
@@ -102,7 +103,7 @@ class CoupledModes:
         kp_full: FloatArray
         ks_full: FloatArray
         ki_full: FloatArray
-        if _is_beta_model(beta):
+        if isinstance(beta, BETA_MODEL_TYPES):
             beta_model = cast(BetaModel, beta)
             kp = np.asarray(beta_model.kp, dtype=float)
             ks = np.asarray(beta_model.ks, dtype=float)

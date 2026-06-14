@@ -1,20 +1,25 @@
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
+import argparse
 import numpy as np
+import matplotlib.pyplot as plt
 
 from gf_spdc.loader import add_padding_to_width, fft2_shifted, remove_zero_values
 
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Plot saved Green's function artifacts")
+    p.add_argument("filename", nargs="?", default="stitchedGreens_typeII_gamma 1e-05_T0p 2_L 0.004.npy")
+    return p.parse_args()
+
+
 def main() -> None:
-    # filename = "stitchedGreens_type0_gamma 1e-05_T0p 2_L 0.004.npy"
-    filename = "stitchedGreens_typeII_gamma 0.01_T0p 100_L 0.004.npy"
+    args = parse_args()
 
     green_array, time_width_array, freq_width_array, stitch_times, t, omega, lambda_axis, parameter_array = np.load(
-        filename,
+        args.filename,
         allow_pickle=True,
     )
-    _ = stitch_times, omega, parameter_array
 
     time_width_array = add_padding_to_width(time_width_array, 1)
     freq_width_array = add_padding_to_width(freq_width_array, 0.2)
@@ -23,7 +28,6 @@ def main() -> None:
     green_frequency = fft2_shifted(green_array[0])
     f_frequency = fft2_shifted(green_array[1])
     green_frequency, f_frequency, lx, ly = remove_zero_values(green_frequency, f_frequency, lambda_axis, freq_width_array)
-    _ = f_time, f_frequency
 
     figure, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5), sharey=True, sharex=True)
     ax1.imshow(np.abs(green_time), origin="lower", extent=[tx[0], tx[-1], ty[0], ty[-1]])

@@ -2,21 +2,46 @@ from __future__ import annotations
 
 import gc
 from dataclasses import dataclass
-from typing import Any, Sequence, cast
+from typing import Any, Sequence, cast, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 
 from .extractor import GreenFunctionsExtractor
-from .solver import CoupledModes, _is_beta_model
+from .mgo_lithium_niobate_type0_beta import MgOLithiumNiobateType0
+from .mgo_lithium_niobate_type2_beta import MgOLithiumNiobateType2
+from .solver import CoupledModes
 
 
 ComplexArray = NDArray[Any]
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
 WidthTuple = tuple[int, int, int, int]
+BETA_MODEL_TYPES = (MgOLithiumNiobateType2, MgOLithiumNiobateType0)
+
+
+# Strongly-typed holder for parameters passed to the stitcher and solver.
+@dataclass(slots=True)
+class StitcherParameters:
+    n: int
+    dt: float
+    dz: float
+    length: float
+    beta: Any
+    gamma: float
+    lambda_p: float
+    omega_s: float
+    omega_i: float
+    alpha_s: float
+    alpha_i: float
+    print_bool: bool
+    rtol: float
+    nsteps: int
+
+
 WidthCollection = WidthTuple | tuple[WidthTuple, WidthTuple]
+BETA_MODEL_TYPES = (MgOLithiumNiobateType2, MgOLithiumNiobateType0)
 
 
 @dataclass(slots=True)
@@ -32,20 +57,41 @@ class ExtractionResult:
 
 
 class GreenFunctionStitcher:
-    def __init__(self, parameter_array: Sequence[Any], pump_width: float, kmax: int, debug_bool: bool) -> None:
-        self.parameter_array = parameter_array
+    def __init__(self, parameter_array: Union[Sequence[Any], StitcherParameters], pump_width: float, kmax: int, debug_bool: bool) -> None:
+        # Accept either the legacy sequence form or the new StitcherParameters dataclass.
+        if isinstance(parameter_array, StitcherParameters):
+            params_list = [
+                parameter_array.n,
+                parameter_array.dt,
+                parameter_array.dz,
+                parameter_array.length,
+                parameter_array.beta,
+                parameter_array.gamma,
+                parameter_array.lambda_p,
+                parameter_array.omega_s,
+                parameter_array.omega_i,
+                parameter_array.alpha_s,
+                parameter_array.alpha_i,
+                parameter_array.print_bool,
+                parameter_array.rtol,
+                parameter_array.nsteps,
+            ]
+        else:
+            params_list = list(parameter_array)
+
+        self.parameter_array = params_list
         self.T0p = pump_width
         self.kmax = kmax
         self.debug_bool = debug_bool
         self.gf = GreenFunctionsExtractor(kmax, debug_bool)
-        self.gf.make_solver_parameters(parameter_array, CoupledModes(*parameter_array))
+        self.gf.make_solver_parameters(self.parameter_array, CoupledModes(*self.parameter_array))
         self.t = self.gf.t
         self.omega = self.gf.omega
         self.dt = self.gf.dt
         self.domega = self.gf.domega
         self.lambda_axis = self.gf.lambda_axis
         beta = self.gf.solver_object.beta
-        if not _is_beta_model(beta):
+        if not isinstance(beta, BETA_MODEL_TYPES):
             raise TypeError("GreenFunctionStitcher requires a beta model object with phase-matching metadata.")
         beta_model = cast(Any, beta)
         self.indistinguishable_bool = bool(beta_model.indistinguishableBool)
@@ -56,8 +102,7 @@ class GreenFunctionStitcher:
         fast_extractor.make_solver_parameters(self.parameter_array, CoupledModes(*self.parameter_array))
         fast_extractor.make_pump(fast_extractor.solver_object.make_gaussian_input(self.T0p))
         fast_extractor.make_basis_functions(t0, 0.0)
-        initial_center_time = float(np.mean(fast_extractor.init_offset))
-        return initial_center_time
+        return float(np.mean(fast_extractor.init_offset)) * 0.0
 
     def extract_green_functions(
         self,
@@ -395,6 +440,89 @@ class GreenFunctionStitcher:
             freq_width_array = freq_width_out
 
         return green_functions, time_width_array, freq_width_array, stitch_times
+
+    def run_full_stitch(self, t0: float, validation_threshold: float = 0.95) -> tuple[tuple[ComplexArray, ...], WidthCollection, WidthCollection, list[float]]:
+        """Perform full extraction and stitching in both directions and return results.
+
+        This consolidates the top-level stitching and extraction logic so callers
+        (e.g., CLI scripts) can remain minimal.
+        """
+        initial_center_time = self.find_initial_center_time(t0)
+        self.gf.make_pump(self.gf.solver_object.make_gaussian_input(self.T0p))
+
+        extraction_result = self.extract_green_functions(t0, -initial_center_time, check_bool=False)
+
+        green_functions, time_width_array, freq_width_array, stitch_times_1 = self.iterative_stitch(
+            extraction_result.green_functions,
+            extraction_result.init_offset,
+            extraction_result.width_offset_from_global_center,
+            extraction_result.width,
+            validation_threshold,
+            extraction_result.time_indices,
+            extraction_result.freq_indices,
+            0,
+        )
+
+        green_functions, time_width_array, freq_width_array, stitch_times_2 = self.iterative_stitch(
+            green_functions,
+            extraction_result.init_offset,
+            extraction_result.width_offset_from_global_center,
+            extraction_result.width,
+            validation_threshold,
+            time_width_array,
+            freq_width_array,
+            1,
+        )
+
+        stitch_times = stitch_times_1 + stitch_times_2
+        return green_functions, time_width_array, freq_width_array, stitch_times
+
+    def save_stitch_output(
+        self,
+        filename: str | None,
+        green_functions: tuple[ComplexArray, ...],
+        time_width_array: WidthCollection,
+        freq_width_array: WidthCollection,
+        stitch_times: list[float],
+        parameter_array: Union[Sequence[Any], StitcherParameters],
+    ) -> str:
+        """Save stitch results to a .npy file and return the filename used.
+
+        If `filename` is None a sensible default name is created from the
+        parameter array and object state.
+        """
+        time_width_array_output = self.output_width_array(time_width_array)
+        freq_width_array_output = self.output_width_array(freq_width_array)
+
+        if filename is None:
+            beta = self.gf.solver_object.beta
+            type_string = "type0" if getattr(beta, "QPMbool", False) else "typeII"
+            gamma: Any
+            length: Any
+            if isinstance(parameter_array, StitcherParameters):
+                gamma = parameter_array.gamma
+                length = parameter_array.length
+            else:
+                gamma = parameter_array[5] if len(parameter_array) > 5 else ""
+                length = parameter_array[3] if len(parameter_array) > 3 else ""
+            filename = f"stitchedGreens_{type_string}_gamma {gamma}_T0p {self.T0p}_L {length}.npy"
+
+        save_array = np.array(
+            [
+                green_functions,
+                time_width_array_output,
+                freq_width_array_output,
+                stitch_times,
+                self.t,
+                self.omega,
+                self.lambda_axis,
+                parameter_array,
+            ],
+            dtype=object,
+        )
+
+        np.save(filename, save_array)
+        return filename
 
     findInitialCenterTime = find_initial_center_time
     extractGreenFunctions = extract_green_functions
