@@ -353,6 +353,7 @@ class GreenFunctionStitcher:
                 signal_idler_test_index,
                 plot_bool=False,
             )
+            print(f"Test overlap at edge of region: {overlap:.6f}")
             self.gf.debug_print(f"Test overlap at edge of region: {overlap}")
             if overlap > 0.999:
                 print("Test overlap is greater than 99.9%, stitching complete.")
@@ -394,6 +395,10 @@ class GreenFunctionStitcher:
                     plot_bool=False,
                 )
 
+                print(
+                    f"Stitch overlaps — new: {stitch_overlap_new:.6f}, old: {stitch_overlap_old:.6f}, diff: {abs(stitch_overlap_new - stitch_overlap_old):.6f}"
+                )
+
                 if abs(stitch_overlap_new - stitch_overlap_old) < 0.02:
                     print("New Green's function provides a decent solution at the stitching point, continuing.")
                     break
@@ -424,6 +429,7 @@ class GreenFunctionStitcher:
                 signal_idler_test_index,
                 plot_bool=False,
             )
+            print(f"Validation overlap at center of new Green's function: {overlap_new:.6f}")
             self.gf.debug_print(f"Validation overlap at center of new Green's function: {overlap_new}")
 
             if overlap_new < 0.025:
