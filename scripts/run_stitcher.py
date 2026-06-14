@@ -1,4 +1,7 @@
+#%%
 from __future__ import annotations
+
+
 
 """Notebook-friendly runner helpers for Green function stitching.
 
@@ -73,8 +76,8 @@ def build_default_params(
 def run_stitcher_from_params(
     params: StitcherParameters,
     pump_width: float = 2.0,
-    basis_width: float = 0.5,
-    kmax: int | None = None,
+    basis_width: float = 1,
+    kmax: int = 50,
     validation_threshold: float = 0.95,
     save: bool = True,
     filename: str | None = None,
@@ -83,8 +86,7 @@ def run_stitcher_from_params(
 
     Returns the tuple returned by `run_full_stitch` and the filename if saved.
     """
-    kmax_final = params.n if kmax is None else kmax
-    stitcher = GreenFunctionStitcher(params, pump_width, kmax_final, debug_bool=False)
+    stitcher = GreenFunctionStitcher(params, pump_width, kmax, debug_bool=False)
 
     green_functions, time_width_array, freq_width_array, stitch_times = stitcher.run_full_stitch(
         basis_width, validation_threshold
@@ -94,3 +96,9 @@ def run_stitcher_from_params(
     if save:
         saved_name = stitcher.save_stitch_output(filename, green_functions, time_width_array, freq_width_array, stitch_times, params)
     return green_functions, time_width_array, freq_width_array, stitch_times, saved_name
+
+#%%
+if __name__ == "__main__":
+    params = build_default_params()
+    run_stitcher_from_params(params, basis_width=0.5,kmax=50)
+# %%
