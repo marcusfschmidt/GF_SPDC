@@ -61,12 +61,11 @@ _WORKER_PUMP: ComplexArray | None = None
 
 def _init_worker_solver(
     parameter_array: Sequence[Any],
-    time_offset: float,
     basis: ComplexArray,
     pump: ComplexArray,
 ) -> None:
     global _WORKER_SOLVER, _WORKER_BASIS, _WORKER_NOISE, _WORKER_PUMP
-    _WORKER_SOLVER = CoupledModes(*parameter_array, time_offset=time_offset)
+    _WORKER_SOLVER = CoupledModes(*parameter_array)
     _WORKER_BASIS = basis
     _WORKER_PUMP = pump
     _WORKER_NOISE = np.zeros_like(pump)
@@ -149,7 +148,6 @@ class GreenFunctionsExtractor:
     ) -> None:
         self.parameters_array = cast(SolverParameterTuple, tuple(parameters_array))
         self.solver_object = solver_object
-        self.time_offset = float(getattr(solver_object, "time_offset", 0.0))
         self.time_len = self.solver_object.N
         self.t = self.solver_object.t
         self.omega = self.solver_object.omega
@@ -239,7 +237,7 @@ class GreenFunctionsExtractor:
         if pool is None:
             with _make_pool(
                 _init_worker_solver,
-                (self.parameters_array, self.time_offset, self.A_basis, self.Ap_0),
+                (self.parameters_array, self.A_basis, self.Ap_0),
             ) as local_pool:
                 results = list(
                     tqdm(
@@ -462,7 +460,7 @@ class GreenFunctionsExtractor:
 
         with _make_pool(
             _init_worker_solver,
-            (self.parameters_array, self.time_offset, self.A_basis, self.Ap_0),
+            (self.parameters_array, self.A_basis, self.Ap_0),
         ) as pool:
             self.debug_print("\nPropagating signal...", end="\n")
             signal_start = perf_counter()

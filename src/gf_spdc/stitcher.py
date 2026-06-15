@@ -91,8 +91,10 @@ class GreenFunctionStitcher:
         self.T0p = pump_width
         self.kmax = kmax
         self.debug_bool = debug_bool
-        self.center_time_offset = 0.0
-        self.gf = self._make_extractor(time_offset=0.0)
+        self.gf = GreenFunctionsExtractor(kmax, debug_bool)
+        self.gf.make_solver_parameters(
+            self.parameter_array, CoupledModes(*self.parameter_array)
+        )
         self.t = self.gf.t
         self.omega = self.gf.omega
         self.dt = self.gf.dt
@@ -106,18 +108,14 @@ class GreenFunctionStitcher:
         beta_model = cast(Any, beta)
         self.indistinguishable_bool = bool(beta_model.indistinguishableBool)
         self.current_basis_width: float | None = None
-        self.validation_solver = CoupledModes(*self.parameter_array, time_offset=0.0)
+        self.validation_solver = CoupledModes(*self.parameter_array)
         self.seam_blend_fraction = 0.1
 
-    def _make_extractor(self, time_offset: float) -> GreenFunctionsExtractor:
-        extractor = GreenFunctionsExtractor(self.kmax, self.debug_bool)
-        extractor.make_solver_parameters(
-            self.parameter_array, CoupledModes(*self.parameter_array, time_offset=time_offset)
-        )
-        return extractor
-
     def find_initial_center_time(self, t0: float) -> float:
-        fast_extractor = self._make_extractor(time_offset=0.0)
+        fast_extractor = GreenFunctionsExtractor(1, False)
+        fast_extractor.make_solver_parameters(
+            self.parameter_array, CoupledModes(*self.parameter_array)
+        )
         fast_extractor.make_pump(
             fast_extractor.solver_object.make_gaussian_input(self.T0p)
         )
@@ -131,19 +129,8 @@ class GreenFunctionStitcher:
         check_bool: bool = False,
     ) -> ExtractionResult:
         self.current_basis_width = t0
-        self.center_time_offset = basis_offset
-        self.gf = self._make_extractor(time_offset=self.center_time_offset)
-        self.validation_solver = CoupledModes(
-            *self.parameter_array,
-            time_offset=self.center_time_offset,
-        )
-        self.t = self.gf.t
-        self.omega = self.gf.omega
-        self.dt = self.gf.dt
-        self.domega = self.gf.domega
-        self.lambda_axis = self.gf.lambda_axis
         self.gf.make_pump(self.gf.solver_object.make_gaussian_input(self.T0p))
-        self.gf.make_basis_functions(t0, 0.0)
+        self.gf.make_basis_functions(t0, basis_offset)
         green_tuple, overlaps, schmidt_numbers = self.gf.run_extractor(
             self.indistinguishable_bool, check_bool
         )
