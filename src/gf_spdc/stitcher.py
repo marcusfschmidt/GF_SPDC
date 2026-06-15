@@ -141,8 +141,8 @@ class GreenFunctionStitcher:
         offset_x1_idler = -(self.t[t1x_idler] - (-self.gf.init_offset[0]))
         offset_x2_idler = -(self.t[t2x_idler] - (-self.gf.init_offset[0]))
         width = float(np.abs(offset_x1_idler - offset_x2_idler))
-        width_offset_from_global_center = np.array(
-            [offset_x1_idler, offset_x2_idler], dtype=float
+        width_offset_from_global_center = (
+            np.array([offset_x1_idler, offset_x2_idler], dtype=float) / 2
         )
 
         if not self.indistinguishable_bool:
@@ -410,8 +410,9 @@ class GreenFunctionStitcher:
             )
 
             if test_offset < self.t[0] or test_offset > self.t[-1]:
-                print(
-                    "Offset exceeds time axis, stitching complete. Inspect the output to determine if the time window should be extended."
+                tqdm.write(
+                    "Offset exceeds time axis, stitching complete. "
+                    "Inspect the output to determine if the time window should be extended."
                 )
                 break
 
@@ -451,7 +452,7 @@ class GreenFunctionStitcher:
                 if stitch_move_bool:
                     a_test = a_stitch_test
                     tqdm.write(
-                        f"{iteration_header} | stitch point moved, edge region redefined as center of new Green's functions"
+                        f"{iteration_header} | stitch point moved, retrying"
                     )
                     break
 
