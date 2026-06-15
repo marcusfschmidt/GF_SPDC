@@ -104,6 +104,7 @@ class GreenFunctionStitcher:
         beta_model = cast(Any, beta)
         self.indistinguishable_bool = bool(beta_model.indistinguishableBool)
         self.current_basis_width: float | None = None
+        self.validation_solver = CoupledModes(*self.parameter_array, time_offset=0.0)
 
     def _make_extractor(self, time_offset: float) -> GreenFunctionsExtractor:
         extractor = GreenFunctionsExtractor(self.kmax, self.debug_bool)
@@ -129,6 +130,10 @@ class GreenFunctionStitcher:
         self.current_basis_width = t0
         self.center_time_offset = basis_offset
         self.gf = self._make_extractor(time_offset=self.center_time_offset)
+        self.validation_solver = CoupledModes(
+            *self.parameter_array,
+            time_offset=self.center_time_offset,
+        )
         self.t = self.gf.t
         self.omega = self.gf.omega
         self.dt = self.gf.dt
@@ -207,7 +212,7 @@ class GreenFunctionStitcher:
         in_index = int(basis_index)
         out_index = int(not basis_index)
 
-        cnlse = CoupledModes(*self.gf.parameters_array, time_offset=self.gf.time_offset)
+        cnlse = self.validation_solver
         input_field, output_field = self.gf.run_cnlse(init_conditions, cnlse)
 
         input_component = input_field[:, in_index]

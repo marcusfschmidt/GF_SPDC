@@ -46,17 +46,28 @@ def _parallel_green(
     )
 
 
-def _make_pool():
+def _make_pool(initializer=None, initargs: tuple[Any, ...] = ()):
     start_methods = get_all_start_methods()
     context_name = "forkserver" if "forkserver" in start_methods else "spawn"
-    return get_context(context_name).Pool()
+    return get_context(context_name).Pool(initializer=initializer, initargs=initargs)
+
+
+_WORKER_SOLVER: CoupledModes | None = None
+
+
+def _init_worker_solver(parameter_array: Sequence[Any], time_offset: float) -> None:
+    global _WORKER_SOLVER
+    _WORKER_SOLVER = CoupledModes(*parameter_array, time_offset=time_offset)
 
 
 def _parallel_extract(
-    args: tuple[ExtractTask, Sequence[Any], float],
+    args: ExtractTask,
 ) -> tuple[ComplexArray, ComplexArray, ComplexArray]:
-    task, parameter_array, time_offset = args
-    cnlse = CoupledModes(*parameter_array, time_offset=time_offset)
+    task = args
+    global _WORKER_SOLVER
+    if _WORKER_SOLVER is None:
+        raise RuntimeError("Worker solver was not initialized.")
+    cnlse = _WORKER_SOLVER
     if task.basis_index == 0:
         init_conditions = np.array([task.basis_slice, task.a_noise, task.pump])
     elif task.basis_index == 1:
@@ -214,12 +225,12 @@ class GreenFunctionsExtractor:
             for basis_order in range(self.kmax)
         ]
 
-        with _make_pool() as pool:
+        with _make_pool(_init_worker_solver, (self.parameters_array, self.time_offset)) as pool:
             results = list(
                 tqdm(
                     pool.imap(
                         _parallel_extract,
-                        [(task, self.parameters_array, self.time_offset) for task in tasks],
+                        tasks,
                     ),
                     total=len(tasks),
                     desc="Extracting modes",
