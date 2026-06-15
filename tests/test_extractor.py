@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 
 from gf_spdc.extractor import GreenFunctionsExtractor, _parallel_green
@@ -50,3 +52,24 @@ def test_parallel_green_matches_explicit_mode_sum() -> None:
     result = _parallel_green((v_modes, rho_values, u_modes))
     expected = sum(rho_values[index] * np.outer(v_modes[index], np.conjugate(u_modes[index])) for index in range(2))
     np.testing.assert_allclose(result, expected)
+
+
+def test_max_resolved_basis_order_decreases_for_smaller_width() -> None:
+    extractor = make_extractor(dt=0.5)
+    assert extractor.max_resolved_basis_order(0.5) < extractor.max_resolved_basis_order(2.0)
+
+
+def test_make_basis_functions_limits_active_kmax_when_underresolved() -> None:
+    extractor = GreenFunctionsExtractor(kmax=50, debug_bool=False)
+    extractor.dt = 0.5
+    extractor.time_len = 32
+    extractor.solver_object = SimpleNamespace(
+        timeShiftArray=np.zeros(2, dtype=float),
+        make_hermite_gaussian_basis_functions=lambda offset, t0, order, fft_bool=True: np.full(32, order + 1, dtype=complex),
+    )
+
+    extractor.make_basis_functions(t0=0.5)
+
+    expected_active_kmax = min(extractor.kmax, extractor.max_resolved_basis_order(0.5) + 1)
+    assert extractor.active_kmax == expected_active_kmax
+    assert extractor.A_basis.shape == (expected_active_kmax, 32, 2)

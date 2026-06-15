@@ -107,7 +107,20 @@ def _parallel_extract(
 class GreenFunctionsExtractor:
     def __init__(self, kmax: int, debug_bool: bool = True) -> None:
         self.kmax = kmax
+        self.active_kmax = kmax
         self.debug_bool = debug_bool
+
+    def max_resolved_basis_order(
+        self, t0: float, min_points_per_shortest_period: float = 8.0
+    ) -> int:
+        if t0 <= 0.0:
+            raise ValueError("Basis width t0 must be positive.")
+        if min_points_per_shortest_period <= 0.0:
+            raise ValueError("min_points_per_shortest_period must be positive.")
+
+        max_local_wavenumber = 2 * np.pi / (min_points_per_shortest_period * self.dt)
+        max_order = int(np.floor(((max_local_wavenumber * t0) ** 2 - 1.0) / 2.0))
+        return max(0, max_order)
 
     def fft(self, field: ComplexArray) -> ComplexArray:
         field = np.fft.fftshift(
@@ -151,7 +164,13 @@ class GreenFunctionsExtractor:
     def make_basis_functions(
         self, t0: float, basis_function_offset: float = 0.0
     ) -> None:
-        self.A_basis = np.zeros((self.kmax, self.time_len, 2), dtype=complex)
+        self.active_kmax = min(self.kmax, self.max_resolved_basis_order(t0) + 1)
+        if self.active_kmax < self.kmax:
+            self.debug_print(
+                f"Limiting basis order to {self.active_kmax - 1} for t0={t0} and dt={self.dt}."
+            )
+
+        self.A_basis = np.zeros((self.active_kmax, self.time_len, 2), dtype=complex)
         self.T0 = t0
         self.basis_function_offset = basis_function_offset
 
@@ -162,7 +181,7 @@ class GreenFunctionsExtractor:
             dtype=float,
         )
 
-        for basis_order in range(self.kmax):
+        for basis_order in range(self.active_kmax):
             self.A_basis[basis_order, :, 0] = (
                 self.solver_object.make_hermite_gaussian_basis_functions(
                     self.init_offset[0],
@@ -204,6 +223,7 @@ class GreenFunctionsExtractor:
 
         cross_time = self.time_shift_array[int(not basis_index)] / 2
         self_time = self.time_shift_array[basis_index] / 2
+        basis_count = self.active_kmax
 
         task_build_start = perf_counter()
         tasks = [
@@ -211,7 +231,7 @@ class GreenFunctionsExtractor:
                 basis_order=basis_order,
                 basis_index=basis_index,
             )
-            for basis_order in range(self.kmax)
+            for basis_order in range(basis_count)
         ]
         task_build_time = perf_counter() - task_build_start
 
@@ -245,9 +265,9 @@ class GreenFunctionsExtractor:
         worker_time = perf_counter() - worker_start
 
         basis_start = perf_counter()
-        b_cross = np.zeros((self.kmax, self.time_len), dtype=complex)
-        b_self = np.zeros((self.kmax, self.time_len), dtype=complex)
-        for basis_order in range(self.kmax):
+        b_cross = np.zeros((basis_count, self.time_len), dtype=complex)
+        b_self = np.zeros((basis_count, self.time_len), dtype=complex)
+        for basis_order in range(basis_count):
             b_cross[basis_order, :] = (
                 self.solver_object.make_hermite_gaussian_basis_functions(
                     cross_time + self.basis_function_offset,
@@ -267,7 +287,7 @@ class GreenFunctionsExtractor:
         basis_time = perf_counter() - basis_start
 
         projection_start = perf_counter()
-        field_time_array = np.zeros((3, self.kmax, self.time_len), dtype=complex)
+        field_time_array = np.zeros((3, basis_count, self.time_len), dtype=complex)
         (
             field_time_array[0, :, :],
             field_time_array[1, :, :],
