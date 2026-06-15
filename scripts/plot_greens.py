@@ -10,6 +10,23 @@ from gf_spdc.loader import add_padding_to_width, fft2_shifted, remove_zero_value
 DEFAULT_FILENAME = "stitchedGreens_type0_gamma 1e-05_T0p 2.0_L 0.004.npy"
 
 
+def crop_to_support(
+    field: np.ndarray,
+    x_axis: np.ndarray,
+    y_axis: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Trim the low-support borders from a 2D field for plotting."""
+    support = np.abs(field) ** 2
+    threshold = float(np.mean(support))
+    row_indices, col_indices = np.where(support > threshold)
+    if row_indices.size == 0 or col_indices.size == 0:
+        return field, x_axis, y_axis
+
+    y1, y2 = int(row_indices[0]), int(row_indices[-1]) + 1
+    x1, x2 = int(col_indices[0]), int(col_indices[-1]) + 1
+    return field[y1:y2, x1:x2], x_axis[x1:x2], y_axis[y1:y2]
+
+
 def load_stitched(filename: str | None = None):
     """Load a stitched Greens `.npy` file and return its components.
 
@@ -69,6 +86,7 @@ def plot_stitched(filename: str | None = None, show: bool = True) -> None:
     green_time, f_time, tx, ty = remove_zero_values(
         green_array[0], green_array[1], t, time_width_array
     )
+    green_time, tx, ty = crop_to_support(green_time, tx, ty)
 
     # Verify we have reasonable data to plot
     if green_time.shape[0] < 2 or green_time.shape[1] < 2:
