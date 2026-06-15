@@ -42,7 +42,7 @@ def _parallel_green(
 ) -> ComplexArray:
     v_modes, rho_values, u_modes = args
     return np.asarray(
-        (v_modes * rho_values[:, np.newaxis]).T @ np.conjugate(u_modes), dtype=complex
+        (v_modes * rho_values[:, np.newaxis]).T @ u_modes.conj(), dtype=complex
     )
 
 
@@ -94,17 +94,17 @@ def _parallel_overlap(args: tuple[OverlapTask, float]) -> tuple[float, float]:
         np.sum(np.abs(task.output_field) ** 2) * dt
     )
     overlap_cross = float(
-        np.abs(np.sum(np.conjugate(green_output) * output_field) * dt) ** 2
+        np.abs(np.sum(green_output.conj() * output_field) * dt) ** 2
     )
 
-    input_conjugate = np.conjugate(task.input_field)
+    input_conjugate = task.input_field.conj()
     green_output = np.sum(task.g_self * input_conjugate, axis=1) * dt
     green_output = green_output / np.sqrt(np.sum(np.abs(green_output) ** 2) * dt)
     propagated_input = task.propagated_input / np.sqrt(
         np.sum(np.abs(task.propagated_input) ** 2) * dt
     )
     overlap_self = float(
-        np.abs(np.sum(np.conjugate(green_output) * propagated_input) * dt) ** 2
+        np.abs(np.sum(green_output.conj() * propagated_input) * dt) ** 2
     )
     return overlap_cross, overlap_self
 
@@ -336,7 +336,7 @@ class GreenFunctionsExtractor:
         output_field = output_field / np.sqrt(
             np.sum(np.abs(output_field) ** 2) * self.dt
         )
-        overlap = np.sum(np.conjugate(green_output) * output_field) * self.dt
+        overlap = np.sum(green_output.conj() * output_field) * self.dt
         return float(np.abs(overlap) ** 2)
 
     def calculate_green_overlap(
