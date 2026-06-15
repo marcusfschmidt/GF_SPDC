@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import os
 import re
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from gf_spdc.stitcher import GreenFunctionStitcher
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from scripts.run_stitcher import build_default_params, run_stitcher_from_params
 
 

@@ -333,8 +333,7 @@ class GreenFunctionsExtractor:
                 (vss, rho_self, uss),
             ]
 
-        with _make_pool() as pool:
-            results = pool.map(_parallel_green, args_list)
+        results = [_parallel_green(arg_set) for arg_set in args_list]
         self.debug_print("Green's functions extracted.")
         return tuple(results)
 
