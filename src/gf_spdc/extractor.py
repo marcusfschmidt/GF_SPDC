@@ -371,14 +371,21 @@ class GreenFunctionsExtractor:
     def calc_overlap(
         self, green_output: ComplexArray, output_field: ComplexArray
     ) -> float:
-        green_output = green_output / np.sqrt(
-            np.sum(np.abs(green_output) ** 2) * self.dt
-        )
-        output_field = output_field / np.sqrt(
-            np.sum(np.abs(output_field) ** 2) * self.dt
-        )
+        green_norm = float(np.sum(np.abs(green_output) ** 2) * self.dt)
+        output_norm = float(np.sum(np.abs(output_field) ** 2) * self.dt)
+        if (
+            not np.isfinite(green_norm)
+            or not np.isfinite(output_norm)
+            or green_norm <= 0.0
+            or output_norm <= 0.0
+        ):
+            return 0.0
+
+        green_output = green_output / np.sqrt(green_norm)
+        output_field = output_field / np.sqrt(output_norm)
         overlap = np.sum(green_output.conj() * output_field) * self.dt
-        return float(np.abs(overlap) ** 2)
+        overlap_value = float(np.abs(overlap) ** 2)
+        return overlap_value if np.isfinite(overlap_value) else 0.0
 
     def calculate_green_overlap(
         self,
@@ -393,17 +400,40 @@ class GreenFunctionsExtractor:
         green_cross = (g_cross @ input_fields.T).T * self.dt
         green_self = (g_self @ input_fields.conj().T).T * self.dt
 
-        green_cross /= np.sqrt(
-            np.sum(np.abs(green_cross) ** 2, axis=1, keepdims=True) * self.dt
-        )
-        green_self /= np.sqrt(
-            np.sum(np.abs(green_self) ** 2, axis=1, keepdims=True) * self.dt
-        )
-        output_fields_normalized = output_fields / np.sqrt(
-            np.sum(np.abs(output_fields) ** 2, axis=1, keepdims=True) * self.dt
-        )
-        propagated_inputs_normalized = propagated_inputs / np.sqrt(
+        green_cross_norm = np.sum(
+            np.abs(green_cross) ** 2, axis=1, keepdims=True
+        ) * self.dt
+        green_self_norm = np.sum(
+            np.abs(green_self) ** 2, axis=1, keepdims=True
+        ) * self.dt
+        output_norm = np.sum(np.abs(output_fields) ** 2, axis=1, keepdims=True) * self.dt
+        propagated_norm = (
             np.sum(np.abs(propagated_inputs) ** 2, axis=1, keepdims=True) * self.dt
+        )
+
+        green_cross = np.divide(
+            green_cross,
+            np.sqrt(green_cross_norm),
+            out=np.zeros_like(green_cross),
+            where=green_cross_norm > 0.0,
+        )
+        green_self = np.divide(
+            green_self,
+            np.sqrt(green_self_norm),
+            out=np.zeros_like(green_self),
+            where=green_self_norm > 0.0,
+        )
+        output_fields_normalized = np.divide(
+            output_fields,
+            np.sqrt(output_norm),
+            out=np.zeros_like(output_fields),
+            where=output_norm > 0.0,
+        )
+        propagated_inputs_normalized = np.divide(
+            propagated_inputs,
+            np.sqrt(propagated_norm),
+            out=np.zeros_like(propagated_inputs),
+            where=propagated_norm > 0.0,
         )
 
         overlap_cross = np.abs(

@@ -107,6 +107,7 @@ class GreenFunctionStitcher:
         self.indistinguishable_bool = bool(beta_model.indistinguishableBool)
         self.current_basis_width: float | None = None
         self.validation_solver = CoupledModes(*self.parameter_array, time_offset=0.0)
+        self.seam_blend_fraction = 0.1
 
     def _make_extractor(self, time_offset: float) -> GreenFunctionsExtractor:
         extractor = GreenFunctionsExtractor(self.kmax, self.debug_bool)
@@ -268,10 +269,10 @@ class GreenFunctionStitcher:
     ) -> tuple[ComplexArray, ComplexArray, FloatArray, FloatArray]:
         x1, x2, y1, y2 = index_array
         return (
-            g_field[y1:y2, x1:x2],
-            f_field[y1:y2, x1:x2],
-            input_axis[x1:x2],
-            input_axis[y1:y2],
+            g_field[y1 : y2 + 1, x1 : x2 + 1],
+            f_field[y1 : y2 + 1, x1 : x2 + 1],
+            input_axis[x1 : x2 + 1],
+            input_axis[y1 : y2 + 1],
         )
 
     def stitch_green_functions(
@@ -314,8 +315,56 @@ class GreenFunctionStitcher:
     ) -> tuple[ComplexArray, ComplexArray]:
         abs_diff1 = np.abs(self.t + t1)
         abs_diff2 = np.abs(self.t + t2)
-        condition = (abs_diff1 < abs_diff2)[np.newaxis, :]
-        return np.where(condition, g1, g2), np.where(condition, f1, f2)
+        seam_blend_fraction = float(getattr(self, "seam_blend_fraction", 0.0))
+        hard_mask = abs_diff1 < abs_diff2
+
+        if seam_blend_fraction <= 0.0:
+            condition = hard_mask[np.newaxis, :]
+            return np.where(condition, g1, g2), np.where(condition, f1, f2)
+
+        seam_transitions = np.flatnonzero(hard_mask[:-1] != hard_mask[1:])
+        if seam_transitions.size == 0:
+            condition = hard_mask[np.newaxis, :]
+            return np.where(condition, g1, g2), np.where(condition, f1, f2)
+
+        blend_half_width = max(
+            1,
+            int(np.ceil(seam_blend_fraction * max(abs_diff1.size, 1))),
+        )
+        column_positions = np.arange(hard_mask.size, dtype=float)
+        weight_old = hard_mask.astype(float)
+
+        for seam_index in seam_transitions:
+            left = max(0, seam_index - blend_half_width + 1)
+            right = min(hard_mask.size - 1, seam_index + blend_half_width)
+            if right < left:
+                continue
+
+            seam_center = seam_index + 0.5
+            window_positions = column_positions[left : right + 1]
+            normalized = (window_positions - seam_center) / max(blend_half_width, 1)
+            window_weights = 0.5 * (1.0 - np.clip(normalized, -1.0, 1.0))
+
+            if hard_mask[seam_index]:
+                weight_old[left : right + 1] = window_weights
+            else:
+                weight_old[left : right + 1] = 1.0 - window_weights
+
+        amplitude_floor = 1e-6 * max(
+            float(np.max(np.abs(g1))),
+            float(np.max(np.abs(g2))),
+            1.0,
+        )
+        blend_supported = (
+            (np.abs(g1) > amplitude_floor) & (np.abs(g2) > amplitude_floor)
+        )
+        hard_weight_old = hard_mask.astype(float)[np.newaxis, :]
+        weight_old = np.where(blend_supported, weight_old[np.newaxis, :], hard_weight_old)
+        weight_new = 1.0 - weight_old
+        return (
+            weight_old * g1 + weight_new * g2,
+            weight_old * f1 + weight_new * f2,
+        )
 
     def compare_width_arrays_helper_function(
         self, array1: WidthTuple, array2: WidthTuple
