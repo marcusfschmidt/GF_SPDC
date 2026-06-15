@@ -388,18 +388,22 @@ class GreenFunctionsExtractor:
     ) -> tuple[
         tuple[ComplexArray, ...], RealArray | None, FloatArray | RealArray | None
     ]:
+        run_start = perf_counter()
         overlaps: RealArray | None = None
         schmidt_numbers: FloatArray | RealArray | None = None
         g_tuple: tuple[ComplexArray, ...] = ()
 
         self.debug_print("\nPropagating signal...", end="\n")
+        signal_start = perf_counter()
         u_s, idler_rho, v_i, uss, self_rhos, vss, is_time_array, ti, signal_basis = (
             self.extract_schmidt_modes(0)
         )
+        signal_time = perf_counter() - signal_start
         self.t_signal_propagated = 2 * ti
 
         if not indistinguishable_bool:
             self.debug_print("Propagating idler...", end="\n")
+            idler_start = perf_counter()
             (
                 u_i,
                 signal_rho,
@@ -411,8 +415,10 @@ class GreenFunctionsExtractor:
                 ts,
                 idler_basis,
             ) = self.extract_schmidt_modes(1)
+            idler_time = perf_counter() - idler_start
             self.t_idler_propagated = 2 * ts
 
+            assemble_start = perf_counter()
             args_tuple_full: tuple[Any, ...] = (
                 u_s,
                 v_s,
@@ -425,9 +431,11 @@ class GreenFunctionsExtractor:
                 signal_rho,
                 self_rhos,
             )
+            green_start = perf_counter()
             result_full = self.extract_green_functions(
                 args_tuple_full, indistinguishable_bool
             )
+            green_time = perf_counter() - green_start
             g_is = result_full[0]
             g_ii = result_full[1]
             g_si = result_full[2]
@@ -437,6 +445,7 @@ class GreenFunctionsExtractor:
             g_ii = np.roll(g_ii, round((2 * ti) / self.dt), axis=1)
             g_si = np.roll(g_si, round((2 * ti) / self.dt), axis=1)
             g_tuple = (g_is, g_ii, g_si, g_ss)
+            assemble_time = perf_counter() - assemble_start
 
             if check_bool:
                 print(f"Photon number from G_is: {self.photon_number(g_is)}")
@@ -456,7 +465,15 @@ class GreenFunctionsExtractor:
                 schmidt_idler = self.check_schmidt_numbers(self_rho_i, signal_rho)
                 schmidt_numbers = np.vstack((schmidt_signal, schmidt_idler)).T
                 print("Finished!")
+            tqdm.write(
+                (
+                    f"Run extractor: signal {signal_time:.2f}s, idler {idler_time:.2f}s, "
+                    f"green {green_time:.2f}s, assemble {assemble_time:.2f}s, "
+                    f"total {perf_counter() - run_start:.2f}s"
+                )
+            )
         else:
+            assemble_start = perf_counter()
             args_tuple_simple: tuple[Any, ...] = (
                 u_s,
                 v_i,
@@ -465,14 +482,17 @@ class GreenFunctionsExtractor:
                 idler_rho,
                 self_rhos,
             )
+            green_start = perf_counter()
             result_simple = self.extract_green_functions(
                 args_tuple_simple, indistinguishable_bool
             )
+            green_time = perf_counter() - green_start
             g_field = result_simple[0]
             f_field = result_simple[1]
             g_field = np.roll(g_field, round((2 * ti) / self.dt), axis=1)
             f_field = np.roll(f_field, round((2 * ti) / self.dt), axis=1)
             g_tuple = (g_field, f_field)
+            assemble_time = perf_counter() - assemble_start
 
             if check_bool:
                 print(f"Photon number from G: {self.photon_number(g_field)}")
@@ -480,6 +500,13 @@ class GreenFunctionsExtractor:
                 overlaps = self.calculate_green_overlap(g_field, f_field, is_time_array)
                 schmidt_numbers = self.check_schmidt_numbers(self_rhos, idler_rho)
                 print("Finished!")
+            tqdm.write(
+                (
+                    f"Run extractor: signal {signal_time:.2f}s, green {green_time:.2f}s, "
+                    f"assemble {assemble_time:.2f}s, "
+                    f"total {perf_counter() - run_start:.2f}s"
+                )
+            )
 
         return g_tuple, overlaps, schmidt_numbers
 

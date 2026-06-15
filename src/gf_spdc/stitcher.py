@@ -560,6 +560,7 @@ class GreenFunctionStitcher:
         extraction_result = self.extract_green_functions(
             t0, -initial_center_time, check_bool=False
         )
+        tqdm.write("Starting iterative stitching...")
 
         green_functions, time_width_array, freq_width_array, stitch_times_1 = (
             self.iterative_stitch(
