@@ -216,7 +216,7 @@ class GreenFunctionsExtractor:
         with _make_pool() as pool:
             results = list(
                 tqdm(
-                    pool.imap_unordered(
+                    pool.imap(
                         _parallel_extract,
                         [(task, self.parameters_array) for task in tasks],
                     ),

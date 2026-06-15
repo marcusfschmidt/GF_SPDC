@@ -514,7 +514,7 @@ class GreenFunctionStitcher:
                 f"Validation overlap at center of new Green's function: {overlap_new}"
             )
 
-            if overlap_new < 0.04:
+            if overlap_new < 0.025:
                 print("New overlap approaching zero, stitching complete.")
                 print("#################################################\n")
                 return green_functions, time_width_array, freq_width_array, stitch_times
