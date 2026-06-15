@@ -381,6 +381,8 @@ class GreenFunctionStitcher:
         low_high_index: int = 0,
         signal_idler_test_index: int = 0,
         phase_label: str = "",
+        step_fraction: float = 1.0,
+        stitch_skip_threshold: float = 0.95,
     ) -> tuple[tuple[ComplexArray, ...], WidthCollection, WidthCollection, list[float]]:
         if self.current_basis_width is None:
             raise RuntimeError("Basis width has not been set yet.")
@@ -478,6 +480,10 @@ class GreenFunctionStitcher:
                     f"{iteration_header} | stitch new={stitch_overlap_new:.6f} old={stitch_overlap_old:.6f} diff={abs(stitch_overlap_new - stitch_overlap_old):.6f}"
                 )
 
+                if stitch_overlap_new > stitch_skip_threshold and stitch_overlap_old > stitch_skip_threshold:
+                    tqdm.write(f"{iteration_header} | stitch point accepted (both overlaps high)")
+                    break
+
                 if abs(stitch_overlap_new - stitch_overlap_old) < 0.03:
                     tqdm.write(f"{iteration_header} | stitch point accepted")
                     break
@@ -520,7 +526,7 @@ class GreenFunctionStitcher:
                 tqdm.write("#################################################\n")
                 return green_functions, time_width_array, freq_width_array, stitch_times
 
-            width_offset_from_global_center += width_offset_from_new_center
+            width_offset_from_global_center += width_offset_from_new_center * step_fraction
             width = width_new
             green_functions = updated_green_functions
             center_time = center_time_new
@@ -530,12 +536,30 @@ class GreenFunctionStitcher:
         return green_functions, time_width_array, freq_width_array, stitch_times
 
     def run_full_stitch(
-        self, t0: float, validation_threshold: float = 0.95
+        self,
+        t0: float,
+        validation_threshold: float = 0.95,
+        kmax_pilot: int | None = None,
+        sv_threshold: float = 0.01,
+        step_fraction: float = 1.0,
+        stitch_skip_threshold: float = 0.95,
     ) -> tuple[tuple[ComplexArray, ...], WidthCollection, WidthCollection, list[float]]:
         """Perform full extraction and stitching in both directions and return results.
 
-        This consolidates the top-level stitching and extraction logic so callers
-        (e.g., CLI scripts) can remain minimal.
+        Parameters
+        ----------
+        step_fraction:
+            Multiplier on the auto-detected per-step advance.  The default
+            (1.0) steps by the detected GF support width.  For narrow basis
+            functions (small ``basis_width``) this can be very small; increase
+            ``step_fraction`` (e.g. 3–10) to take larger strides and reduce the
+            total number of iterations.
+        stitch_skip_threshold:
+            When *both* the new and old GF overlaps at the proposed stitch
+            point exceed this value, accept the stitch immediately without
+            triggering a second extraction.  Set to 1.0 to disable (original
+            behaviour) or 0.95 to skip the probe whenever both GFs are already
+            high-fidelity there.
         """
         initial_center_time = self.find_initial_center_time(t0) * 0.0
         self.gf.make_pump(self.gf.solver_object.make_gaussian_input(self.T0p))
@@ -575,6 +599,8 @@ class GreenFunctionStitcher:
                 extraction_result.freq_indices,
                 0,
                 phase_label="pass 1",
+                step_fraction=step_fraction,
+                stitch_skip_threshold=stitch_skip_threshold,
             )
         )
 
@@ -591,6 +617,8 @@ class GreenFunctionStitcher:
                 freq_width_array,
                 1,
                 phase_label="pass 2",
+                step_fraction=step_fraction,
+                stitch_skip_threshold=stitch_skip_threshold,
             )
         )
 

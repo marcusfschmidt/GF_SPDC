@@ -85,19 +85,38 @@ def run_stitcher_from_params(
     basis_width: float = 1,
     kmax: int = 20,
     validation_threshold: float = 0.49,
+    step_fraction: float = 1.0,
+    stitch_skip_threshold: float = 0.95,
     save: bool = True,
     filename: str | None = None,
 ):
     """Run extraction and stitching using `params`.
+
+    Parameters
+    ----------
+    step_fraction:
+        Multiplier on the per-step advance.  Increase above 1.0 to take
+        larger strides when ``basis_width`` is small (e.g. 3–10 for
+        ``basis_width=0.1``).
+    stitch_skip_threshold:
+        Skip the second (stitch-probe) extraction when both GF overlaps at
+        the proposed stitch point already exceed this value.  0.95 is a good
+        default; set to 1.0 to restore the original behaviour.
 
     Returns the tuple returned by `run_full_stitch` and the filename if saved.
     """
     stitcher = GreenFunctionStitcher(params, pump_width, kmax, debug_bool=False)
 
     green_functions, time_width_array, freq_width_array, stitch_times = (
-        stitcher.run_full_stitch(basis_width, validation_threshold)
+        stitcher.run_full_stitch(
+            basis_width,
+            validation_threshold,
+            step_fraction=step_fraction,
+            stitch_skip_threshold=stitch_skip_threshold,
+        )
     )
 
+    print(np.max(green_functions[0]), np.max(green_functions[1]))
     saved_name = None
     if save:
         saved_name = stitcher.save_stitch_output(
@@ -113,6 +132,7 @@ def run_stitcher_from_params(
 
 # %%
 if __name__ == "__main__":
-    params = build_default_params(type="0", n=11, dt=0.5e-2)
-    run_stitcher_from_params(params, basis_width=0.5, kmax=20)
+    params = build_default_params(type="0", n=11, dt=0.7e-2)
+    params.gamma = 100
+    run_stitcher_from_params(params, basis_width=0.2, kmax=50, step_fraction=5)
 # %%
