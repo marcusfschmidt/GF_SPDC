@@ -8,12 +8,12 @@ from typing import Any, Sequence, cast, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore[import-untyped]
 
 from .extractor import GreenFunctionsExtractor
 from .mgo_lithium_niobate_type0_beta import MgOLithiumNiobateType0
 from .mgo_lithium_niobate_type2_beta import MgOLithiumNiobateType2
-from .solver import CoupledModes
+from .solver import CoupledModes, SolverParameterTuple
 
 
 ComplexArray = NDArray[Any]
@@ -87,7 +87,7 @@ class GreenFunctionStitcher:
         else:
             params_list = list(parameter_array)
 
-        self.parameter_array = params_list
+        self.parameter_array = cast(SolverParameterTuple, tuple(params_list))
         self.T0p = pump_width
         self.kmax = kmax
         self.debug_bool = debug_bool
@@ -394,6 +394,7 @@ class GreenFunctionStitcher:
         freq_width_array: WidthCollection,
         low_high_index: int = 0,
         signal_idler_test_index: int = 0,
+        phase_label: str = "",
     ) -> tuple[tuple[ComplexArray, ...], WidthCollection, WidthCollection, list[float]]:
         if self.current_basis_width is None:
             raise RuntimeError("Basis width has not been set yet.")
@@ -406,7 +407,10 @@ class GreenFunctionStitcher:
         width_offset_from_global_center = np.copy(width_offset_initial)
         center_time = np.copy(center_time_initial)
 
-        tqdm.write("Iteratively stitching Green's functions...")
+        header = "Iteratively stitching Green's functions"
+        if phase_label:
+            header = f"{header} ({phase_label})"
+        tqdm.write(f"{header}...")
         stitch_times: list[float] = []
         iteration = 0
 
@@ -557,10 +561,12 @@ class GreenFunctionStitcher:
         initial_center_time = self.find_initial_center_time(t0)
         self.gf.make_pump(self.gf.solver_object.make_gaussian_input(self.T0p))
 
+        tqdm.write("Initial extraction: building Green's functions...")
+
         extraction_result = self.extract_green_functions(
             t0, -initial_center_time, check_bool=False
         )
-        tqdm.write("Starting iterative stitching...")
+        tqdm.write("Initial extraction complete. Starting iterative stitching (pass 1)...")
 
         green_functions, time_width_array, freq_width_array, stitch_times_1 = (
             self.iterative_stitch(
@@ -572,8 +578,11 @@ class GreenFunctionStitcher:
                 extraction_result.time_indices,
                 extraction_result.freq_indices,
                 0,
+                phase_label="pass 1",
             )
         )
+
+        tqdm.write("Starting iterative stitching (pass 2)...")
 
         green_functions, time_width_array, freq_width_array, stitch_times_2 = (
             self.iterative_stitch(
@@ -585,6 +594,7 @@ class GreenFunctionStitcher:
                 time_width_array,
                 freq_width_array,
                 1,
+                phase_label="pass 2",
             )
         )
 

@@ -5,11 +5,11 @@ from math import factorial
 from typing import Any, Protocol, Sequence, cast
 
 import numpy as np
-import scipy as sp
+import scipy as sp  # type: ignore[import-untyped]
 from numpy.typing import NDArray
-from scipy import special
-from scipy.integrate import ode
-from scipy.interpolate import InterpolatedUnivariateSpline
+from scipy import special  # type: ignore[import-untyped]
+from scipy.integrate import ode  # type: ignore[import-untyped]
+from scipy.interpolate import InterpolatedUnivariateSpline  # type: ignore[import-untyped]
 
 from .mgo_lithium_niobate_type0_beta import MgOLithiumNiobateType0
 from .mgo_lithium_niobate_type2_beta import MgOLithiumNiobateType2
@@ -30,6 +30,22 @@ class BetaModel(Protocol):
 
 
 TaylorBeta = Sequence[Sequence[float]]
+SolverParameterTuple = tuple[
+    int,
+    float,
+    float,
+    float,
+    BetaModel | Sequence[Sequence[float]],
+    float,
+    float,
+    float,
+    float,
+    float,
+    float,
+    bool,
+    float,
+    int,
+]
 
 BETA_MODEL_TYPES = (MgOLithiumNiobateType2, MgOLithiumNiobateType0)
 
@@ -51,6 +67,7 @@ class CoupledModes:
         print_bool: bool = False,
         rtol: float = 1e-3,
         nsteps: int = 10000,
+        *,
         integration_method: str = "rk4",
         time_offset: float = 0.0,
     ) -> None:

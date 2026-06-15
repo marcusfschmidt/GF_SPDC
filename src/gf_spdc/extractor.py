@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from multiprocessing import get_all_start_methods, get_context
 from time import perf_counter
-from typing import Any, Sequence
+from typing import Any, Sequence, cast
 
 import numpy as np
 from numpy.linalg import svd
 from numpy.typing import NDArray
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore[import-untyped]
 
-from .solver import CoupledModes
+from .solver import CoupledModes, SolverParameterTuple
 
 
 ComplexArray = NDArray[Any]
@@ -140,7 +140,7 @@ class GreenFunctionsExtractor:
     def make_solver_parameters(
         self, parameters_array: Sequence[Any], solver_object: CoupledModes
     ) -> None:
-        self.parameters_array = list(parameters_array)
+        self.parameters_array = cast(SolverParameterTuple, tuple(parameters_array))
         self.solver_object = solver_object
         self.time_offset = float(getattr(solver_object, "time_offset", 0.0))
         self.time_len = self.solver_object.N
