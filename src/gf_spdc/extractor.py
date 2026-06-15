@@ -261,23 +261,26 @@ class GreenFunctionsExtractor:
         (
             field_time_array[0, :, :],
             field_time_array[1, :, :],
-            field_time_array[2, :, :],
+        field_time_array[2, :, :],
         ) = zip(*results)
 
-        g_cross = np.dot(field_time_array[1], np.conjugate(b_cross.T)) * self.dt
-        g_self = np.dot(field_time_array[2], np.conjugate(b_self.T)) * self.dt
+        b_cross_T = b_cross.T.conj()
+        b_self_T = b_self.T.conj()
+
+        g_cross = np.dot(field_time_array[1], b_cross_T) * self.dt
+        g_self = np.dot(field_time_array[2], b_self_T) * self.dt
         self.debug_print("")
 
         u_cross, rho_cross, v_cross_conjugate = svd(g_cross)
-        v_cross = np.conjugate(v_cross_conjugate).T
+        v_cross = v_cross_conjugate.conj().T
 
         u_self, rho_self, v_self_conjugate = svd(g_self)
-        v_self = np.conjugate(v_self_conjugate).T
+        v_self = v_self_conjugate.conj().T
 
-        u_cross = np.conjugate(u_cross)
-        u_self = np.conjugate(u_self)
-        v_cross = np.conjugate(v_cross)
-        v_self = np.conjugate(v_self)
+        u_cross = u_cross.conj()
+        u_self = u_self.conj()
+        v_cross = v_cross.conj()
+        v_self = v_self.conj()
 
         phi = np.matmul(u_cross.T, b_self)
         phi_self = np.matmul(u_self.T, b_self)
