@@ -52,6 +52,7 @@ class CoupledModes:
         rtol: float = 1e-3,
         nsteps: int = 10000,
         integration_method: str = "rk4",
+        time_offset: float = 0.0,
     ) -> None:
         self.N = 2 ** int(n)
         self.dt = dt
@@ -65,6 +66,7 @@ class CoupledModes:
         self.initial_conditions_flag = False
         self.print_bool = print_bool
         self.integration_method = integration_method.lower()
+        self.time_offset = time_offset
         if self.integration_method not in {"rk4", "adaptive"}:
             raise ValueError("integration_method must be 'rk4' or 'adaptive'.")
 
@@ -79,7 +81,7 @@ class CoupledModes:
         self.c = 299792458e-12
         self.hbar = 1.054571817e-34 * 1e12
 
-        self.t = np.arange(-self.N / 2, self.N / 2, dtype=float) * self.dt
+        self.t = np.arange(-self.N / 2, self.N / 2, dtype=float) * self.dt + self.time_offset
         self.domega = 2 * np.pi / (self.N * self.dt)
         self.omega = np.arange(-self.N / 2, self.N / 2, dtype=float) * self.domega
 

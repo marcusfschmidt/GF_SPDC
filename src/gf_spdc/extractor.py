@@ -53,10 +53,10 @@ def _make_pool():
 
 
 def _parallel_extract(
-    args: tuple[ExtractTask, Sequence[Any]],
+    args: tuple[ExtractTask, Sequence[Any], float],
 ) -> tuple[ComplexArray, ComplexArray, ComplexArray]:
-    task, parameter_array = args
-    cnlse = CoupledModes(*parameter_array)
+    task, parameter_array, time_offset = args
+    cnlse = CoupledModes(*parameter_array, time_offset=time_offset)
     if task.basis_index == 0:
         init_conditions = np.array([task.basis_slice, task.a_noise, task.pump])
     elif task.basis_index == 1:
@@ -130,6 +130,7 @@ class GreenFunctionsExtractor:
     ) -> None:
         self.parameters_array = list(parameters_array)
         self.solver_object = solver_object
+        self.time_offset = float(getattr(solver_object, "time_offset", 0.0))
         self.time_len = self.solver_object.N
         self.t = self.solver_object.t
         self.omega = self.solver_object.omega
@@ -218,7 +219,7 @@ class GreenFunctionsExtractor:
                 tqdm(
                     pool.imap(
                         _parallel_extract,
-                        [(task, self.parameters_array) for task in tasks],
+                        [(task, self.parameters_array, self.time_offset) for task in tasks],
                     ),
                     total=len(tasks),
                     desc="Extracting modes",
