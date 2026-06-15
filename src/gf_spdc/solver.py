@@ -287,6 +287,16 @@ class CoupledModes:
         k4 = self.ode_nl(z + dz, field_interaction + dz * k3)
         return field_interaction + dz * (k1 + 2 * k2 + 2 * k3 + k4) / 6.0
 
+    def _prepare_run(self) -> tuple[int, NDArray[np.float64], float]:
+        if not self.initial_conditions_flag:
+            raise RuntimeError("No initial conditions given.")
+
+        nz_float = self.L / self.dz
+        n_save = int(np.round(nz_float))
+        self.dz = self.L / n_save
+        state = np.hstack((np.real(self.As_0), np.imag(self.As_0), np.real(self.Ai_0), np.imag(self.Ai_0)))
+        return n_save, state, 0.0
+
     def ode_nl(self, z: float, field_interaction: NDArray[np.float64]) -> NDArray[np.float64]:
         field_interaction = np.reshape(field_interaction, (4, self.N))
         as_real, as_imag, ai_real, ai_imag = field_interaction
@@ -309,12 +319,7 @@ class CoupledModes:
         return np.hstack((np.real(das), np.imag(das), np.real(dai), np.imag(dai)))
 
     def run(self) -> tuple[FloatArray, FloatArray, float, FloatArray, ComplexArray, ComplexArray]:
-        if not self.initial_conditions_flag:
-            raise RuntimeError("No initial conditions given.")
-
-        nz_float = self.L / self.dz
-        n_save = int(np.round(nz_float))
-        self.dz = self.L / n_save
+        n_save, state, z_current = self._prepare_run()
 
         z_out = np.zeros(n_save + 1, dtype=float)
         field_spec = np.zeros((n_save + 1, self.N, 2), dtype=complex)
@@ -325,8 +330,6 @@ class CoupledModes:
         start_time = time.time()
 
         time_left = 0.0
-        state = np.hstack((np.real(self.As_0), np.imag(self.As_0), np.real(self.Ai_0), np.imag(self.Ai_0)))
-        z_current = 0.0
         for step_index in range(1, n_save + 1):
             step_start = time.time()
             if self.print_bool:
@@ -356,3 +359,23 @@ class CoupledModes:
             print(f"\nSimulation time [s]: {np.round(total_time, 2)}")
 
         return z_out, self.omega, self.omega_p, self.t, field_spec, field_time
+
+    def run_final_only(self) -> tuple[ComplexArray, ComplexArray]:
+        n_save, state, z_current = self._prepare_run()
+
+        initial_state = np.array(
+            [np.real(self.As_0), np.imag(self.As_0), np.real(self.Ai_0), np.imag(self.Ai_0)]
+        )
+        _, _, input_field_time = self.save_variables(0, initial_state)
+
+        for _ in range(1, n_save + 1):
+            if self.integration_method == "adaptive":
+                self.solver.integrate(z_current + self.dz)
+                state = self.solver.y
+            else:
+                state = self.rk4_step(z_current, state, self.dz)
+            z_current += self.dz
+
+        fields = np.reshape(state, (4, self.N))
+        _, _, output_field_time = self.save_variables(n_save, fields)
+        return input_field_time, output_field_time

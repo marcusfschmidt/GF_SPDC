@@ -77,9 +77,7 @@ def _parallel_extract(
         raise ValueError(f"Unsupported basis index {task.basis_index}")
 
     cnlse.set_initial_conditions(init_conditions)
-    _, _, _, _, _, field_time = cnlse.run()
-    input_field = field_time[0, :, :]
-    output_field = field_time[-1, :, :]
+    input_field, output_field = cnlse.run_final_only()
     return (
         input_field[:, task.in_index],
         output_field[:, task.out_index],
