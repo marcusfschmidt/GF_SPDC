@@ -36,9 +36,13 @@ class OverlapTask:
     propagated_input: ComplexArray
 
 
-def _parallel_green(args: tuple[ComplexArray, FloatArray, ComplexArray]) -> ComplexArray:
+def _parallel_green(
+    args: tuple[ComplexArray, FloatArray, ComplexArray],
+) -> ComplexArray:
     v_modes, rho_values, u_modes = args
-    return np.asarray((v_modes * rho_values[:, np.newaxis]).T @ np.conjugate(u_modes), dtype=complex)
+    return np.asarray(
+        (v_modes * rho_values[:, np.newaxis]).T @ np.conjugate(u_modes), dtype=complex
+    )
 
 
 def _make_pool():
@@ -47,7 +51,9 @@ def _make_pool():
     return get_context(context_name).Pool()
 
 
-def _parallel_extract(args: tuple[ExtractTask, Sequence[Any]]) -> tuple[ComplexArray, ComplexArray, ComplexArray]:
+def _parallel_extract(
+    args: tuple[ExtractTask, Sequence[Any]],
+) -> tuple[ComplexArray, ComplexArray, ComplexArray]:
     task, parameter_array = args
     cnlse = CoupledModes(*parameter_array)
     if task.basis_index == 0:
@@ -61,22 +67,34 @@ def _parallel_extract(args: tuple[ExtractTask, Sequence[Any]]) -> tuple[ComplexA
     _, _, _, _, _, field_time = cnlse.run()
     input_field = field_time[0, :, :]
     output_field = field_time[-1, :, :]
-    print(f"Finished k = {task.basis_order}")
-    return input_field[:, task.in_index], output_field[:, task.out_index], output_field[:, task.in_index]
+    # print(f"Finished k = {task.basis_order}")
+    return (
+        input_field[:, task.in_index],
+        output_field[:, task.out_index],
+        output_field[:, task.in_index],
+    )
 
 
 def _parallel_overlap(args: tuple[OverlapTask, float]) -> tuple[float, float]:
     task, dt = args
     green_output = np.sum(task.g_cross * task.input_field, axis=1) * dt
     green_output = green_output / np.sqrt(np.sum(np.abs(green_output) ** 2) * dt)
-    output_field = task.output_field / np.sqrt(np.sum(np.abs(task.output_field) ** 2) * dt)
-    overlap_cross = float(np.abs(np.sum(np.conjugate(green_output) * output_field) * dt) ** 2)
+    output_field = task.output_field / np.sqrt(
+        np.sum(np.abs(task.output_field) ** 2) * dt
+    )
+    overlap_cross = float(
+        np.abs(np.sum(np.conjugate(green_output) * output_field) * dt) ** 2
+    )
 
     input_conjugate = np.conjugate(task.input_field)
     green_output = np.sum(task.g_self * input_conjugate, axis=1) * dt
     green_output = green_output / np.sqrt(np.sum(np.abs(green_output) ** 2) * dt)
-    propagated_input = task.propagated_input / np.sqrt(np.sum(np.abs(task.propagated_input) ** 2) * dt)
-    overlap_self = float(np.abs(np.sum(np.conjugate(green_output) * propagated_input) * dt) ** 2)
+    propagated_input = task.propagated_input / np.sqrt(
+        np.sum(np.abs(task.propagated_input) ** 2) * dt
+    )
+    overlap_self = float(
+        np.abs(np.sum(np.conjugate(green_output) * propagated_input) * dt) ** 2
+    )
     return overlap_cross, overlap_self
 
 
@@ -86,20 +104,30 @@ class GreenFunctionsExtractor:
         self.debug_bool = debug_bool
 
     def fft(self, field: ComplexArray) -> ComplexArray:
-        field = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(field, axes=0), axis=0), axes=0)
-        field = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(field, axes=1), axis=1), axes=1)
+        field = np.fft.fftshift(
+            np.fft.fft(np.fft.ifftshift(field, axes=0), axis=0), axes=0
+        )
+        field = np.fft.fftshift(
+            np.fft.fft(np.fft.ifftshift(field, axes=1), axis=1), axes=1
+        )
         return field
 
     def ifft(self, field: ComplexArray) -> ComplexArray:
-        field = np.fft.ifftshift(np.fft.ifft(np.fft.fftshift(field, axes=0), axis=0), axes=0)
-        field = np.fft.ifftshift(np.fft.ifft(np.fft.fftshift(field, axes=1), axis=1), axes=1)
+        field = np.fft.ifftshift(
+            np.fft.ifft(np.fft.fftshift(field, axes=0), axis=0), axes=0
+        )
+        field = np.fft.ifftshift(
+            np.fft.ifft(np.fft.fftshift(field, axes=1), axis=1), axes=1
+        )
         return field
 
     def debug_print(self, *args: object, **kwargs: Any) -> None:
         if self.debug_bool:
             print(*args, **kwargs)
 
-    def make_solver_parameters(self, parameters_array: Sequence[Any], solver_object: CoupledModes) -> None:
+    def make_solver_parameters(
+        self, parameters_array: Sequence[Any], solver_object: CoupledModes
+    ) -> None:
         self.parameters_array = list(parameters_array)
         self.solver_object = solver_object
         self.time_len = self.solver_object.N
@@ -113,28 +141,39 @@ class GreenFunctionsExtractor:
     def make_pump(self, field: ComplexArray) -> None:
         self.Ap_0 = field
 
-    def make_basis_functions(self, t0: float, basis_function_offset: float = 0.0) -> None:
+    def make_basis_functions(
+        self, t0: float, basis_function_offset: float = 0.0
+    ) -> None:
         self.A_basis = np.zeros((self.kmax, self.time_len, 2), dtype=complex)
         self.T0 = t0
         self.basis_function_offset = basis_function_offset
 
         beta_s_pl = self.solver_object.timeShiftArray[0] / 2
         beta_i_pl = self.solver_object.timeShiftArray[1] / 2
-        self.init_offset = np.array([-beta_s_pl + basis_function_offset, -beta_i_pl + basis_function_offset], dtype=float)
+        self.init_offset = np.array(
+            [-beta_s_pl + basis_function_offset, -beta_i_pl + basis_function_offset],
+            dtype=float,
+        )
 
         for basis_order in range(self.kmax):
-            self.A_basis[basis_order, :, 0] = self.solver_object.make_hermite_gaussian_basis_functions(
-                self.init_offset[0],
-                t0,
-                basis_order,
+            self.A_basis[basis_order, :, 0] = (
+                self.solver_object.make_hermite_gaussian_basis_functions(
+                    self.init_offset[0],
+                    t0,
+                    basis_order,
+                )
             )
-            self.A_basis[basis_order, :, 1] = self.solver_object.make_hermite_gaussian_basis_functions(
-                self.init_offset[1],
-                t0,
-                basis_order,
+            self.A_basis[basis_order, :, 1] = (
+                self.solver_object.make_hermite_gaussian_basis_functions(
+                    self.init_offset[1],
+                    t0,
+                    basis_order,
+                )
             )
 
-    def run_cnlse(self, init_conditions: NDArray[np.complex128], cnlse: CoupledModes) -> tuple[ComplexArray, ComplexArray]:
+    def run_cnlse(
+        self, init_conditions: NDArray[np.complex128], cnlse: CoupledModes
+    ) -> tuple[ComplexArray, ComplexArray]:
         cnlse.set_initial_conditions(init_conditions)
         _, _, _, _, _, field_time = cnlse.run()
         return field_time[0, :, :], field_time[-1, :, :]
@@ -175,26 +214,36 @@ class GreenFunctionsExtractor:
         ]
 
         with _make_pool() as pool:
-            results = pool.map(_parallel_extract, [(task, self.parameters_array) for task in tasks])
+            results = pool.map(
+                _parallel_extract, [(task, self.parameters_array) for task in tasks]
+            )
 
         b_cross = np.zeros((self.kmax, self.time_len), dtype=complex)
         b_self = np.zeros((self.kmax, self.time_len), dtype=complex)
         for basis_order in range(self.kmax):
-            b_cross[basis_order, :] = self.solver_object.make_hermite_gaussian_basis_functions(
-                cross_time + self.basis_function_offset,
-                self.T0,
-                basis_order,
-                fft_bool=False,
+            b_cross[basis_order, :] = (
+                self.solver_object.make_hermite_gaussian_basis_functions(
+                    cross_time + self.basis_function_offset,
+                    self.T0,
+                    basis_order,
+                    fft_bool=False,
+                )
             )
-            b_self[basis_order, :] = self.solver_object.make_hermite_gaussian_basis_functions(
-                self_time + self.basis_function_offset,
-                self.T0,
-                basis_order,
-                fft_bool=False,
+            b_self[basis_order, :] = (
+                self.solver_object.make_hermite_gaussian_basis_functions(
+                    self_time + self.basis_function_offset,
+                    self.T0,
+                    basis_order,
+                    fft_bool=False,
+                )
             )
 
         field_time_array = np.zeros((3, self.kmax, self.time_len), dtype=complex)
-        field_time_array[0, :, :], field_time_array[1, :, :], field_time_array[2, :, :] = zip(*results)
+        (
+            field_time_array[0, :, :],
+            field_time_array[1, :, :],
+            field_time_array[2, :, :],
+        ) = zip(*results)
 
         g_cross = np.dot(field_time_array[1], np.conjugate(b_cross.T)) * self.dt
         g_self = np.dot(field_time_array[2], np.conjugate(b_self.T)) * self.dt
@@ -217,20 +266,35 @@ class GreenFunctionsExtractor:
         psi_self = np.matmul(v_self.T, b_self)
         output_basis = [b_cross, b_self]
         self.field_time_array = field_time_array
-        return phi, rho_cross, psi, phi_self, rho_self, psi_self, field_time_array, float(cross_time), output_basis
+        return (
+            phi,
+            rho_cross,
+            psi,
+            phi_self,
+            rho_self,
+            psi_self,
+            field_time_array,
+            float(cross_time),
+            output_basis,
+        )
 
     def extract_green_functions(
-            self,
-            args: tuple[Any, ...],
-            indistinguishable_bool: bool,
-        ) -> tuple[ComplexArray, ...]:
+        self,
+        args: tuple[Any, ...],
+        indistinguishable_bool: bool,
+    ) -> tuple[ComplexArray, ...]:
         self.debug_print("Extracting Green's functions...", end="\n")
         if indistinguishable_bool:
             us, vi, uss, vss, rho_cross, rho_self = args
             args_list = [(vi, rho_cross, us), (vss, rho_self, uss)]
         else:
             us, vs, ui, vi, uss, vss, uii, vii, rho_cross, rho_self = args
-            args_list = [(vi, rho_cross, us), (vii, rho_self, uii), (vs, rho_cross, ui), (vss, rho_self, uss)]
+            args_list = [
+                (vi, rho_cross, us),
+                (vii, rho_self, uii),
+                (vs, rho_cross, ui),
+                (vss, rho_self, uss),
+            ]
 
         with _make_pool() as pool:
             results = pool.map(_parallel_green, args_list)
@@ -241,9 +305,15 @@ class GreenFunctionsExtractor:
         n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1)
         return float(np.sum(n_t) * self.dt)
 
-    def calc_overlap(self, green_output: ComplexArray, output_field: ComplexArray) -> float:
-        green_output = green_output / np.sqrt(np.sum(np.abs(green_output) ** 2) * self.dt)
-        output_field = output_field / np.sqrt(np.sum(np.abs(output_field) ** 2) * self.dt)
+    def calc_overlap(
+        self, green_output: ComplexArray, output_field: ComplexArray
+    ) -> float:
+        green_output = green_output / np.sqrt(
+            np.sum(np.abs(green_output) ** 2) * self.dt
+        )
+        output_field = output_field / np.sqrt(
+            np.sum(np.abs(output_field) ** 2) * self.dt
+        )
         overlap = np.sum(np.conjugate(green_output) * output_field) * self.dt
         return float(np.abs(overlap) ** 2)
 
@@ -255,7 +325,13 @@ class GreenFunctionsExtractor:
     ) -> RealArray:
         overlap_array = np.zeros((field_array.shape[1], 2), dtype=float)
         tasks = [
-            OverlapTask(g_cross, g_self, field_array[0, index, :], field_array[1, index, :], field_array[2, index, :])
+            OverlapTask(
+                g_cross,
+                g_self,
+                field_array[0, index, :],
+                field_array[1, index, :],
+                field_array[2, index, :],
+            )
             for index in range(len(overlap_array))
         ]
         with _make_pool() as pool:
@@ -270,22 +346,49 @@ class GreenFunctionsExtractor:
         self,
         indistinguishable_bool: bool,
         check_bool: bool,
-    ) -> tuple[tuple[ComplexArray, ...], RealArray | None, FloatArray | RealArray | None]:
+    ) -> tuple[
+        tuple[ComplexArray, ...], RealArray | None, FloatArray | RealArray | None
+    ]:
         overlaps: RealArray | None = None
         schmidt_numbers: FloatArray | RealArray | None = None
         g_tuple: tuple[ComplexArray, ...] = ()
 
         self.debug_print("\nPropagating signal...", end="\n")
-        u_s, idler_rho, v_i, uss, self_rhos, vss, is_time_array, ti, signal_basis = self.extract_schmidt_modes(0)
+        u_s, idler_rho, v_i, uss, self_rhos, vss, is_time_array, ti, signal_basis = (
+            self.extract_schmidt_modes(0)
+        )
         self.t_signal_propagated = 2 * ti
 
         if not indistinguishable_bool:
             self.debug_print("Propagating idler...", end="\n")
-            u_i, signal_rho, v_s, uii, self_rho_i, vii, si_time_array, ts, idler_basis = self.extract_schmidt_modes(1)
+            (
+                u_i,
+                signal_rho,
+                v_s,
+                uii,
+                self_rho_i,
+                vii,
+                si_time_array,
+                ts,
+                idler_basis,
+            ) = self.extract_schmidt_modes(1)
             self.t_idler_propagated = 2 * ts
 
-            args_tuple_full: tuple[Any, ...] = (u_s, v_s, u_i, v_i, uss, vss, uii, vii, signal_rho, self_rhos)
-            result_full = self.extract_green_functions(args_tuple_full, indistinguishable_bool)
+            args_tuple_full: tuple[Any, ...] = (
+                u_s,
+                v_s,
+                u_i,
+                v_i,
+                uss,
+                vss,
+                uii,
+                vii,
+                signal_rho,
+                self_rhos,
+            )
+            result_full = self.extract_green_functions(
+                args_tuple_full, indistinguishable_bool
+            )
             g_is = result_full[0]
             g_ii = result_full[1]
             g_si = result_full[2]
@@ -299,10 +402,14 @@ class GreenFunctionsExtractor:
             if check_bool:
                 print(f"Photon number from G_is: {self.photon_number(g_is)}")
                 print(f"Photon number from G_si: {self.photon_number(g_si)}")
-                print(f"Absolute difference: {np.abs(self.photon_number(g_is) - self.photon_number(g_si))}")
+                print(
+                    f"Absolute difference: {np.abs(self.photon_number(g_is) - self.photon_number(g_si))}"
+                )
                 print("Calculating overlaps and Schmidt numbers...")
 
-                overlaps_signal = self.calculate_green_overlap(g_si, g_ii, si_time_array)
+                overlaps_signal = self.calculate_green_overlap(
+                    g_si, g_ii, si_time_array
+                )
                 overlaps_idler = self.calculate_green_overlap(g_is, g_ss, is_time_array)
                 overlaps = np.concatenate((overlaps_signal, overlaps_idler), axis=1)
 
@@ -311,8 +418,17 @@ class GreenFunctionsExtractor:
                 schmidt_numbers = np.vstack((schmidt_signal, schmidt_idler)).T
                 print("Finished!")
         else:
-            args_tuple_simple: tuple[Any, ...] = (u_s, v_i, uss, vss, idler_rho, self_rhos)
-            result_simple = self.extract_green_functions(args_tuple_simple, indistinguishable_bool)
+            args_tuple_simple: tuple[Any, ...] = (
+                u_s,
+                v_i,
+                uss,
+                vss,
+                idler_rho,
+                self_rhos,
+            )
+            result_simple = self.extract_green_functions(
+                args_tuple_simple, indistinguishable_bool
+            )
             g_field = result_simple[0]
             f_field = result_simple[1]
             g_field = np.roll(g_field, round((2 * ti) / self.dt), axis=1)

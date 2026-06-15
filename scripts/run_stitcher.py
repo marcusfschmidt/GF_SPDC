@@ -1,6 +1,5 @@
-#%%
+# %%
 from __future__ import annotations
-
 
 
 """Notebook-friendly runner helpers for Green function stitching.
@@ -53,7 +52,14 @@ def build_default_params(
         beta: Any = MgOLithiumNiobateType2(lambda_s, lambda_i, lambda_p)
     else:
         qpm_period = 5.916450343734758e-6
-        beta = MgOLithiumNiobateType0(lambda_s, lambda_i, lambda_p, ordinary_axis_bool=True, temperature=36, qpm_period=qpm_period)
+        beta = MgOLithiumNiobateType0(
+            lambda_s,
+            lambda_i,
+            lambda_p,
+            ordinary_axis_bool=True,
+            temperature=36,
+            qpm_period=qpm_period,
+        )
 
     return StitcherParameters(
         n=n,
@@ -88,17 +94,25 @@ def run_stitcher_from_params(
     """
     stitcher = GreenFunctionStitcher(params, pump_width, kmax, debug_bool=False)
 
-    green_functions, time_width_array, freq_width_array, stitch_times = stitcher.run_full_stitch(
-        basis_width, validation_threshold
+    green_functions, time_width_array, freq_width_array, stitch_times = (
+        stitcher.run_full_stitch(basis_width, validation_threshold)
     )
 
     saved_name = None
     if save:
-        saved_name = stitcher.save_stitch_output(filename, green_functions, time_width_array, freq_width_array, stitch_times, params)
+        saved_name = stitcher.save_stitch_output(
+            filename,
+            green_functions,
+            time_width_array,
+            freq_width_array,
+            stitch_times,
+            params,
+        )
     return green_functions, time_width_array, freq_width_array, stitch_times, saved_name
 
-#%%
+
+# %%
 if __name__ == "__main__":
-    params = build_default_params()
-    run_stitcher_from_params(params, basis_width=0.5,kmax=50)
+    params = build_default_params(type="0", n=10)
+    run_stitcher_from_params(params, basis_width=0.5, kmax=50)
 # %%
