@@ -109,17 +109,6 @@ class GreenFunctionStitcher:
         self.indistinguishable_bool = bool(beta_model.indistinguishableBool)
         self.current_basis_width: float | None = None
 
-    def find_initial_center_time(self, t0: float) -> float:
-        fast_extractor = GreenFunctionsExtractor(1, False)
-        fast_extractor.make_solver_parameters(
-            self.parameter_array, CoupledModes(*self.parameter_array)
-        )
-        fast_extractor.make_pump(
-            fast_extractor.solver_object.make_gaussian_input(self.T0p)
-        )
-        fast_extractor.make_basis_functions(t0, 0.0)
-        return float(np.mean(fast_extractor.init_offset))
-
     def extract_green_functions(
         self,
         t0: float,
@@ -453,9 +442,7 @@ class GreenFunctionStitcher:
 
                 if stitch_move_bool:
                     a_test = a_stitch_test
-                    tqdm.write(
-                        f"{iteration_header} | stitch point moved, retrying"
-                    )
+                    tqdm.write(f"{iteration_header} | stitch point moved, retrying")
                     break
 
                 a_stitch_test = self.make_test_function(
@@ -480,8 +467,13 @@ class GreenFunctionStitcher:
                     f"{iteration_header} | stitch new={stitch_overlap_new:.6f} old={stitch_overlap_old:.6f} diff={abs(stitch_overlap_new - stitch_overlap_old):.6f}"
                 )
 
-                if stitch_overlap_new > stitch_skip_threshold and stitch_overlap_old > stitch_skip_threshold:
-                    tqdm.write(f"{iteration_header} | stitch point accepted (both overlaps high)")
+                if (
+                    stitch_overlap_new > stitch_skip_threshold
+                    and stitch_overlap_old > stitch_skip_threshold
+                ):
+                    tqdm.write(
+                        f"{iteration_header} | stitch point accepted (both overlaps high)"
+                    )
                     break
 
                 if abs(stitch_overlap_new - stitch_overlap_old) < 0.03:
@@ -526,7 +518,9 @@ class GreenFunctionStitcher:
                 tqdm.write("#################################################\n")
                 return green_functions, time_width_array, freq_width_array, stitch_times
 
-            width_offset_from_global_center += width_offset_from_new_center * step_fraction
+            width_offset_from_global_center += (
+                width_offset_from_new_center * step_fraction
+            )
             width = width_new
             green_functions = updated_green_functions
             center_time = center_time_new
@@ -561,7 +555,7 @@ class GreenFunctionStitcher:
             behaviour) or 0.95 to skip the probe whenever both GFs are already
             high-fidelity there.
         """
-        initial_center_time = self.find_initial_center_time(t0) * 0.0
+        initial_center_time = 0
         self.gf.make_pump(self.gf.solver_object.make_gaussian_input(self.T0p))
 
         tqdm.write("Initial extraction: building Green's functions...")
@@ -672,7 +666,6 @@ class GreenFunctionStitcher:
         np.save(filename, save_array)
         return filename
 
-    findInitialCenterTime = find_initial_center_time
     extractGreenFunctions = extract_green_functions
     findWidth = find_width
     widthHelperFunction = width_helper_function

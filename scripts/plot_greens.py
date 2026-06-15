@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from gf_spdc.loader import add_padding_to_width, fft2_shifted, remove_zero_values
 
 
-DEFAULT_FILENAME = "stitchedGreens_type0_gamma 10_T0p 2.0_L 0.004.npy"
+DEFAULT_FILENAME = "stitchedGreens_type0_gamma 1e-05_T0p 2.0_L 0.004.npy"
 
 
 def load_stitched(filename: str | None = None):
