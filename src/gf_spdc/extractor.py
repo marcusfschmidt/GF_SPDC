@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from multiprocessing import get_all_start_methods, get_context
+from time import perf_counter
 from typing import Any, Sequence
 
 import numpy as np
@@ -204,6 +205,7 @@ class GreenFunctionsExtractor:
         float,
         list[ComplexArray],
     ]:
+        extraction_start = perf_counter()
         pump = self.Ap_0
         a_noise = np.zeros_like(pump)
 
@@ -212,6 +214,7 @@ class GreenFunctionsExtractor:
 
         in_index = int(basis_index)
         out_index = int(not basis_index)
+        task_build_start = perf_counter()
         tasks = [
             ExtractTask(
                 basis_order=basis_order,
@@ -224,7 +227,9 @@ class GreenFunctionsExtractor:
             )
             for basis_order in range(self.kmax)
         ]
+        task_build_time = perf_counter() - task_build_start
 
+        worker_start = perf_counter()
         with _make_pool(_init_worker_solver, (self.parameters_array, self.time_offset)) as pool:
             results = list(
                 tqdm(
@@ -236,7 +241,9 @@ class GreenFunctionsExtractor:
                     desc="Extracting modes",
                 )
             )
+        worker_time = perf_counter() - worker_start
 
+        basis_start = perf_counter()
         b_cross = np.zeros((self.kmax, self.time_len), dtype=complex)
         b_self = np.zeros((self.kmax, self.time_len), dtype=complex)
         for basis_order in range(self.kmax):
@@ -256,12 +263,14 @@ class GreenFunctionsExtractor:
                     fft_bool=False,
                 )
             )
+        basis_time = perf_counter() - basis_start
 
+        projection_start = perf_counter()
         field_time_array = np.zeros((3, self.kmax, self.time_len), dtype=complex)
         (
             field_time_array[0, :, :],
             field_time_array[1, :, :],
-        field_time_array[2, :, :],
+            field_time_array[2, :, :],
         ) = zip(*results)
 
         b_cross_T = b_cross.T.conj()
@@ -269,7 +278,6 @@ class GreenFunctionsExtractor:
 
         g_cross = np.dot(field_time_array[1], b_cross_T) * self.dt
         g_self = np.dot(field_time_array[2], b_self_T) * self.dt
-        self.debug_print("")
 
         u_cross, rho_cross, v_cross_conjugate = svd(g_cross)
         v_cross = v_cross_conjugate.conj().T
@@ -288,6 +296,15 @@ class GreenFunctionsExtractor:
         psi_self = np.matmul(v_self.T, b_self)
         output_basis = [b_cross, b_self]
         self.field_time_array = field_time_array
+        projection_time = perf_counter() - projection_start
+        total_time = perf_counter() - extraction_start
+        tqdm.write(
+            (
+                f"Extraction timing: task setup {task_build_time:.2f}s, "
+                f"workers {worker_time:.2f}s, basis {basis_time:.2f}s, "
+                f"projection/SVD {projection_time:.2f}s, total {total_time:.2f}s"
+            )
+        )
         return (
             phi,
             rho_cross,

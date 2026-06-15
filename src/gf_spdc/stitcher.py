@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import gc
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Sequence, cast, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
+from tqdm import tqdm
 
 from .extractor import GreenFunctionsExtractor
 from .mgo_lithium_niobate_type0_beta import MgOLithiumNiobateType0
@@ -406,9 +408,13 @@ class GreenFunctionStitcher:
 
         print("Iteratively stitching Green's functions...")
         stitch_times: list[float] = []
+        iteration = 0
 
         while True:
+            iteration += 1
+            tqdm.write(f"Stitch iteration {iteration}")
             gc.collect()
+            loop_start = perf_counter()
             edge_test_offset = (
                 center_time[signal_idler_test_index]
                 + self.stitch_time_helper(low_high_index) * width / 2
@@ -435,15 +441,15 @@ class GreenFunctionStitcher:
                 signal_idler_test_index,
                 plot_bool=False,
             )
-            print(f"Test overlap at edge of region: {overlap:.6f}")
+            tqdm.write(f"Test overlap at edge of region: {overlap:.6f}")
             self.gf.debug_print(f"Test overlap at edge of region: {overlap}")
             if overlap > 0.999:
-                print("Test overlap is greater than 99.9%, stitching complete.")
+                tqdm.write("Test overlap is greater than 99.9%, stitching complete.")
                 break
 
             stitch_move_bool = False
             while True:
-                print("Extracting new Green's functions...")
+                tqdm.write("Extracting new Green's functions...")
                 new_result = self.extract_green_functions(
                     self.current_basis_width,
                     float(width_offset_from_global_center[low_high_index]),
@@ -465,7 +471,7 @@ class GreenFunctionStitcher:
                     a_test = self.make_test_function(
                         stitch_time, self.current_basis_width
                     )
-                    print("Stitching point moved, continuing...")
+                    tqdm.write("Stitching point moved, continuing...")
                     break
 
                 a_stitch_test = self.make_test_function(
@@ -486,12 +492,12 @@ class GreenFunctionStitcher:
                     plot_bool=False,
                 )
 
-                print(
+                tqdm.write(
                     f"Stitch overlaps — new: {stitch_overlap_new:.6f}, old: {stitch_overlap_old:.6f}, diff: {abs(stitch_overlap_new - stitch_overlap_old):.6f}"
                 )
 
                 if abs(stitch_overlap_new - stitch_overlap_old) < 0.02:
-                    print(
+                    tqdm.write(
                         "New Green's function provides a decent solution at the stitching point, continuing."
                     )
                     break
@@ -507,7 +513,7 @@ class GreenFunctionStitcher:
                 new_result.freq_indices,
             )
 
-            print("Stitching Green's functions...")
+            tqdm.write("Stitching Green's functions...")
             updated_green_functions = self.stitch_green_functions(
                 center_time,
                 center_time_new,
@@ -522,19 +528,22 @@ class GreenFunctionStitcher:
                 signal_idler_test_index,
                 plot_bool=False,
             )
-            print(
+            tqdm.write(
                 f"Validation overlap at center of new Green's function: {overlap_new:.6f}"
             )
             self.gf.debug_print(
                 f"Validation overlap at center of new Green's function: {overlap_new}"
             )
 
+            loop_time = perf_counter() - loop_start
+            tqdm.write(f"Stitch iteration {iteration} completed in {loop_time:.2f}s")
+
             if overlap_new < 0.025:
-                print("New overlap approaching zero, stitching complete.")
-                print("#################################################\n")
+                tqdm.write("New overlap approaching zero, stitching complete.")
+                tqdm.write("#################################################\n")
                 return green_functions, time_width_array, freq_width_array, stitch_times
 
-            print("Green's function extended by stitching, attempting again...")
+            tqdm.write("Green's function extended by stitching, attempting again...")
             width_offset_from_global_center += width_offset_from_new_center
             width = width_new
             green_functions = updated_green_functions
