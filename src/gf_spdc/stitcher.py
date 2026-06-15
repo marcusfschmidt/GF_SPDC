@@ -108,8 +108,6 @@ class GreenFunctionStitcher:
         beta_model = cast(Any, beta)
         self.indistinguishable_bool = bool(beta_model.indistinguishableBool)
         self.current_basis_width: float | None = None
-        self.validation_solver = CoupledModes(*self.parameter_array)
-        self.seam_blend_fraction = 0.1
 
     def find_initial_center_time(self, t0: float) -> float:
         fast_extractor = GreenFunctionsExtractor(1, False)
@@ -143,8 +141,8 @@ class GreenFunctionStitcher:
         offset_x1_idler = -(self.t[t1x_idler] - (-self.gf.init_offset[0]))
         offset_x2_idler = -(self.t[t2x_idler] - (-self.gf.init_offset[0]))
         width = float(np.abs(offset_x1_idler - offset_x2_idler))
-        width_offset_from_global_center = (
-            np.array([offset_x1_idler, offset_x2_idler], dtype=float) / 2
+        width_offset_from_global_center = np.array(
+            [offset_x1_idler, offset_x2_idler], dtype=float
         )
 
         if not self.indistinguishable_bool:
@@ -202,7 +200,7 @@ class GreenFunctionStitcher:
         in_index = int(basis_index)
         out_index = int(not basis_index)
 
-        cnlse = self.validation_solver
+        cnlse = CoupledModes(*self.parameter_array)
         input_field, output_field = self.gf.run_cnlse(init_conditions, cnlse)
 
         input_component = input_field[:, in_index]
@@ -256,10 +254,10 @@ class GreenFunctionStitcher:
     ) -> tuple[ComplexArray, ComplexArray, FloatArray, FloatArray]:
         x1, x2, y1, y2 = index_array
         return (
-            g_field[y1 : y2 + 1, x1 : x2 + 1],
-            f_field[y1 : y2 + 1, x1 : x2 + 1],
-            input_axis[x1 : x2 + 1],
-            input_axis[y1 : y2 + 1],
+            g_field[y1:y2, x1:x2],
+            f_field[y1:y2, x1:x2],
+            input_axis[x1:x2],
+            input_axis[y1:y2],
         )
 
     def stitch_green_functions(
@@ -302,56 +300,8 @@ class GreenFunctionStitcher:
     ) -> tuple[ComplexArray, ComplexArray]:
         abs_diff1 = np.abs(self.t + t1)
         abs_diff2 = np.abs(self.t + t2)
-        seam_blend_fraction = float(getattr(self, "seam_blend_fraction", 0.0))
-        hard_mask = abs_diff1 < abs_diff2
-
-        if seam_blend_fraction <= 0.0:
-            condition = hard_mask[np.newaxis, :]
-            return np.where(condition, g1, g2), np.where(condition, f1, f2)
-
-        seam_transitions = np.flatnonzero(hard_mask[:-1] != hard_mask[1:])
-        if seam_transitions.size == 0:
-            condition = hard_mask[np.newaxis, :]
-            return np.where(condition, g1, g2), np.where(condition, f1, f2)
-
-        blend_half_width = max(
-            1,
-            int(np.ceil(seam_blend_fraction * max(abs_diff1.size, 1))),
-        )
-        column_positions = np.arange(hard_mask.size, dtype=float)
-        weight_old = hard_mask.astype(float)
-
-        for seam_index in seam_transitions:
-            left = max(0, seam_index - blend_half_width + 1)
-            right = min(hard_mask.size - 1, seam_index + blend_half_width)
-            if right < left:
-                continue
-
-            seam_center = seam_index + 0.5
-            window_positions = column_positions[left : right + 1]
-            normalized = (window_positions - seam_center) / max(blend_half_width, 1)
-            window_weights = 0.5 * (1.0 - np.clip(normalized, -1.0, 1.0))
-
-            if hard_mask[seam_index]:
-                weight_old[left : right + 1] = window_weights
-            else:
-                weight_old[left : right + 1] = 1.0 - window_weights
-
-        amplitude_floor = 1e-6 * max(
-            float(np.max(np.abs(g1))),
-            float(np.max(np.abs(g2))),
-            1.0,
-        )
-        blend_supported = (
-            (np.abs(g1) > amplitude_floor) & (np.abs(g2) > amplitude_floor)
-        )
-        hard_weight_old = hard_mask.astype(float)[np.newaxis, :]
-        weight_old = np.where(blend_supported, weight_old[np.newaxis, :], hard_weight_old)
-        weight_new = 1.0 - weight_old
-        return (
-            weight_old * g1 + weight_new * g2,
-            weight_old * f1 + weight_new * f2,
-        )
+        condition = (abs_diff1 < abs_diff2)[np.newaxis, :]
+        return np.where(condition, g1, g2), np.where(condition, f1, f2)
 
     def compare_width_arrays_helper_function(
         self, array1: WidthTuple, array2: WidthTuple
@@ -454,28 +404,21 @@ class GreenFunctionStitcher:
             iteration += 1
             gc.collect()
             loop_start = perf_counter()
-            edge_test_offset = (
+            test_offset = (
                 center_time[signal_idler_test_index]
                 + self.stitch_time_helper(low_high_index) * width / 2
             )
-            test_offset = (
-                center_time[signal_idler_test_index]
-                + self.stitch_time_helper(low_high_index) * width / 4
-            )
 
-            if edge_test_offset < self.t[0] or edge_test_offset > self.t[-1]:
+            if test_offset < self.t[0] or test_offset > self.t[-1]:
                 print(
                     "Offset exceeds time axis, stitching complete. Inspect the output to determine if the time window should be extended."
                 )
                 break
 
-            a_edge_test = self.make_test_function(
-                edge_test_offset, self.current_basis_width
-            )
             a_test = self.make_test_function(test_offset, self.current_basis_width)
             _, overlap = self.validate_propagation(
                 green_functions[test_index],
-                a_edge_test,
+                a_test,
                 validation_threshold,
                 signal_idler_test_index,
                 plot_bool=False,
@@ -488,9 +431,7 @@ class GreenFunctionStitcher:
 
             stitch_move_bool = False
             while True:
-                tqdm.write(
-                    f"{iteration_header} | extracting new Green's functions"
-                )
+                tqdm.write(f"{iteration_header} | extracting new Green's functions")
                 new_result = self.extract_green_functions(
                     self.current_basis_width,
                     float(width_offset_from_global_center[low_high_index]),
@@ -508,11 +449,10 @@ class GreenFunctionStitcher:
                 stitch_time = test_offset - stitch_half_width
 
                 if stitch_move_bool:
-                    stitch_time -= 2 * stitch_half_width
-                    a_test = self.make_test_function(
-                        stitch_time, self.current_basis_width
+                    a_test = a_stitch_test
+                    tqdm.write(
+                        f"{iteration_header} | stitch point moved, edge region redefined as center of new Green's functions"
                     )
-                    tqdm.write(f"{iteration_header} | stitch point moved, retrying")
                     break
 
                 a_stitch_test = self.make_test_function(
@@ -537,7 +477,7 @@ class GreenFunctionStitcher:
                     f"{iteration_header} | stitch new={stitch_overlap_new:.6f} old={stitch_overlap_old:.6f} diff={abs(stitch_overlap_new - stitch_overlap_old):.6f}"
                 )
 
-                if abs(stitch_overlap_new - stitch_overlap_old) < 0.02:
+                if abs(stitch_overlap_new - stitch_overlap_old) < 0.03:
                     tqdm.write(f"{iteration_header} | stitch point accepted")
                     break
 
@@ -567,7 +507,9 @@ class GreenFunctionStitcher:
                 plot_bool=False,
             )
             loop_time = perf_counter() - loop_start
-            tqdm.write(f"{iteration_header} | validate={overlap_new:.6f} elapsed={loop_time:.2f}s")
+            tqdm.write(
+                f"{iteration_header} | validate={overlap_new:.6f} elapsed={loop_time:.2f}s"
+            )
             self.gf.debug_print(
                 f"Validation overlap at center of new Green's function: {overlap_new}"
             )
@@ -594,7 +536,7 @@ class GreenFunctionStitcher:
         This consolidates the top-level stitching and extraction logic so callers
         (e.g., CLI scripts) can remain minimal.
         """
-        initial_center_time = self.find_initial_center_time(t0)
+        initial_center_time = self.find_initial_center_time(t0) * 0.0
         self.gf.make_pump(self.gf.solver_object.make_gaussian_input(self.T0p))
 
         tqdm.write("Initial extraction: building Green's functions...")
@@ -602,7 +544,24 @@ class GreenFunctionStitcher:
         extraction_result = self.extract_green_functions(
             t0, -initial_center_time, check_bool=False
         )
-        tqdm.write("Initial extraction complete. Starting iterative stitching (pass 1)...")
+        a_test_init = self.make_test_function(
+            float(extraction_result.init_offset[0]), t0
+        )
+        validation_bool, init_overlap = self.validate_propagation(
+            extraction_result.green_functions[0],
+            a_test_init,
+            validation_threshold,
+            plot_bool=False,
+        )
+        # if not validation_bool:
+        #     raise RuntimeError(
+        #         "Validation failed with the requested threshold. "
+        #         "Consider increasing the number of basis functions or the time resolution. "
+        #         f"Initial overlap: {init_overlap:.6f}"
+        #     )
+        tqdm.write(
+            "Initial extraction complete. Starting iterative stitching (pass 1)..."
+        )
 
         green_functions, time_width_array, freq_width_array, stitch_times_1 = (
             self.iterative_stitch(

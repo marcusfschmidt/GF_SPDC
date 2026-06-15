@@ -32,7 +32,7 @@ def build_default_params(
     length: float = 4000e-6,
     gamma: float = 1e-5,
     n: int = 12,
-    dt: float = 0.5e-2,
+    dt: float = 1e-2,
     dz: float = 0.2e-3,
 ) -> StitcherParameters:
     """Return a `StitcherParameters` dataclass with sensible defaults.
@@ -75,7 +75,7 @@ def build_default_params(
         alpha_i=0.0,
         print_bool=False,
         rtol=1e-4,
-        nsteps=8000,
+        nsteps=10000,
     )
 
 
@@ -83,8 +83,8 @@ def run_stitcher_from_params(
     params: StitcherParameters,
     pump_width: float = 2.0,
     basis_width: float = 1,
-    kmax: int = 50,
-    validation_threshold: float = 0.95,
+    kmax: int = 20,
+    validation_threshold: float = 0.49,
     save: bool = True,
     filename: str | None = None,
 ):
@@ -113,6 +113,6 @@ def run_stitcher_from_params(
 
 # %%
 if __name__ == "__main__":
-    params = build_default_params(type="0", n=12, dt=0.2e-2)
-    run_stitcher_from_params(params, basis_width=0.5, kmax=100)
+    params = build_default_params(type="0", n=10, dt=0.6e-2)
+    run_stitcher_from_params(params, basis_width=0.5, kmax=20)
 # %%

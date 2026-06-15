@@ -59,7 +59,7 @@ def test_max_resolved_basis_order_decreases_for_smaller_width() -> None:
     assert extractor.max_resolved_basis_order(0.5) < extractor.max_resolved_basis_order(2.0)
 
 
-def test_make_basis_functions_limits_active_kmax_when_underresolved() -> None:
+def test_make_basis_functions_uses_full_kmax_like_legacy_pipeline() -> None:
     extractor = GreenFunctionsExtractor(kmax=50, debug_bool=False)
     extractor.dt = 0.5
     extractor.time_len = 32
@@ -70,6 +70,5 @@ def test_make_basis_functions_limits_active_kmax_when_underresolved() -> None:
 
     extractor.make_basis_functions(t0=0.5)
 
-    expected_active_kmax = min(extractor.kmax, extractor.max_resolved_basis_order(0.5) + 1)
-    assert extractor.active_kmax == expected_active_kmax
-    assert extractor.A_basis.shape == (expected_active_kmax, 32, 2)
+    assert extractor.active_kmax == extractor.kmax
+    assert extractor.A_basis.shape == (extractor.kmax, 32, 2)

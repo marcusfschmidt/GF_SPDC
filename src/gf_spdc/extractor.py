@@ -162,12 +162,7 @@ class GreenFunctionsExtractor:
     def make_basis_functions(
         self, t0: float, basis_function_offset: float = 0.0
     ) -> None:
-        self.active_kmax = min(self.kmax, self.max_resolved_basis_order(t0) + 1)
-        if self.active_kmax < self.kmax:
-            self.debug_print(
-                f"Limiting basis order to {self.active_kmax - 1} for t0={t0} and dt={self.dt}."
-            )
-
+        self.active_kmax = self.kmax
         self.A_basis = np.zeros((self.active_kmax, self.time_len, 2), dtype=complex)
         self.T0 = t0
         self.basis_function_offset = basis_function_offset
@@ -340,27 +335,26 @@ class GreenFunctionsExtractor:
         self,
         args: tuple[Any, ...],
         indistinguishable_bool: bool,
-        input_shifts: tuple[int, ...],
     ) -> tuple[ComplexArray, ...]:
         self.debug_print("Extracting Green's functions...", end="\n")
         if indistinguishable_bool:
             us, vi, uss, vss, rho_cross, rho_self = args
             args_list = [
-                (vi, rho_cross, us, input_shifts[0]),
-                (vss, rho_self, uss, input_shifts[1]),
+                (vi, rho_cross, us),
+                (vss, rho_self, uss),
             ]
         else:
             us, vs, ui, vi, uss, vss, uii, vii, rho_cross, rho_self = args
             args_list = [
-                (vi, rho_cross, us, input_shifts[0]),
-                (vii, rho_self, uii, input_shifts[1]),
-                (vs, rho_cross, ui, input_shifts[2]),
-                (vss, rho_self, uss, input_shifts[3]),
+                (vi, rho_cross, us),
+                (vii, rho_self, uii),
+                (vs, rho_cross, ui),
+                (vss, rho_self, uss),
             ]
 
-        results = [_parallel_green(arg_set) for arg_set in args_list]
+        results = tuple(_parallel_green(arg_set) for arg_set in args_list)
         self.debug_print("Green's functions extracted.")
-        return tuple(results)
+        return results
 
     def photon_number(self, cross_green_time: ComplexArray) -> float:
         n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1)
@@ -500,21 +494,15 @@ class GreenFunctionsExtractor:
                     signal_rho,
                     self_rhos,
                 )
-                input_shifts = (
-                    round((2 * ts) / self.dt),
-                    round((2 * ti) / self.dt),
-                    round((2 * ti) / self.dt),
-                    round((2 * ts) / self.dt),
-                )
                 green_start = perf_counter()
                 result_full = self.extract_green_functions(
-                    args_tuple_full, indistinguishable_bool, input_shifts
+                    args_tuple_full, indistinguishable_bool
                 )
                 green_time = perf_counter() - green_start
-                g_is = result_full[0]
-                g_ii = result_full[1]
-                g_si = result_full[2]
-                g_ss = result_full[3]
+                g_is = np.roll(result_full[0], round((2 * ts) / self.dt), axis=1)
+                g_ii = np.roll(result_full[1], round((2 * ti) / self.dt), axis=1)
+                g_si = np.roll(result_full[2], round((2 * ti) / self.dt), axis=1)
+                g_ss = np.roll(result_full[3], round((2 * ts) / self.dt), axis=1)
                 g_tuple = (g_is, g_ii, g_si, g_ss)
                 assemble_time = perf_counter() - assemble_start
 
@@ -553,17 +541,13 @@ class GreenFunctionsExtractor:
                     idler_rho,
                     self_rhos,
                 )
-                input_shifts = (
-                    round((2 * ti) / self.dt),
-                    round((2 * ti) / self.dt),
-                )
                 green_start = perf_counter()
                 result_simple = self.extract_green_functions(
-                    args_tuple_simple, indistinguishable_bool, input_shifts
+                    args_tuple_simple, indistinguishable_bool
                 )
                 green_time = perf_counter() - green_start
-                g_field = result_simple[0]
-                f_field = result_simple[1]
+                g_field = np.roll(result_simple[0], round((2 * ti) / self.dt), axis=1)
+                f_field = np.roll(result_simple[1], round((2 * ti) / self.dt), axis=1)
                 g_tuple = (g_field, f_field)
                 assemble_time = perf_counter() - assemble_start
 
