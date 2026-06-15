@@ -25,15 +25,6 @@ class ExtractTask:
     basis_index: int
 
 
-@dataclass(slots=True)
-class OverlapTask:
-    g_cross: ComplexArray
-    g_self: ComplexArray
-    input_field: ComplexArray
-    output_field: ComplexArray
-    propagated_input: ComplexArray
-
-
 def _parallel_green(
     args: tuple[ComplexArray, FloatArray, ComplexArray] | tuple[ComplexArray, FloatArray, ComplexArray, int],
 ) -> ComplexArray:
@@ -111,29 +102,6 @@ def _parallel_extract(
         output_field[:, out_index],
         output_field[:, in_index],
     )
-
-
-def _parallel_overlap(args: tuple[OverlapTask, float]) -> tuple[float, float]:
-    task, dt = args
-    green_output = np.sum(task.g_cross * task.input_field, axis=1) * dt
-    green_output = green_output / np.sqrt(np.sum(np.abs(green_output) ** 2) * dt)
-    output_field = task.output_field / np.sqrt(
-        np.sum(np.abs(task.output_field) ** 2) * dt
-    )
-    overlap_cross = float(
-        np.abs(np.sum(green_output.conj() * output_field) * dt) ** 2
-    )
-
-    input_conjugate = task.input_field.conj()
-    green_output = np.sum(task.g_self * input_conjugate, axis=1) * dt
-    green_output = green_output / np.sqrt(np.sum(np.abs(green_output) ** 2) * dt)
-    propagated_input = task.propagated_input / np.sqrt(
-        np.sum(np.abs(task.propagated_input) ** 2) * dt
-    )
-    overlap_self = float(
-        np.abs(np.sum(green_output.conj() * propagated_input) * dt) ** 2
-    )
-    return overlap_cross, overlap_self
 
 
 class GreenFunctionsExtractor:
@@ -398,21 +366,34 @@ class GreenFunctionsExtractor:
         g_self: ComplexArray,
         field_array: ComplexArray,
     ) -> RealArray:
-        overlap_array = np.zeros((field_array.shape[1], 2), dtype=float)
-        tasks = [
-            OverlapTask(
-                g_cross,
-                g_self,
-                field_array[0, index, :],
-                field_array[1, index, :],
-                field_array[2, index, :],
-            )
-            for index in range(len(overlap_array))
-        ]
-        with _make_pool() as pool:
-            results = pool.map(_parallel_overlap, [(task, self.dt) for task in tasks])
-        overlap_array[:, :] = np.array(results, dtype=float)
-        return overlap_array
+        input_fields = field_array[0]
+        output_fields = field_array[1]
+        propagated_inputs = field_array[2]
+
+        green_cross = (g_cross @ input_fields.T).T * self.dt
+        green_self = (g_self @ input_fields.conj().T).T * self.dt
+
+        green_cross /= np.sqrt(
+            np.sum(np.abs(green_cross) ** 2, axis=1, keepdims=True) * self.dt
+        )
+        green_self /= np.sqrt(
+            np.sum(np.abs(green_self) ** 2, axis=1, keepdims=True) * self.dt
+        )
+        output_fields_normalized = output_fields / np.sqrt(
+            np.sum(np.abs(output_fields) ** 2, axis=1, keepdims=True) * self.dt
+        )
+        propagated_inputs_normalized = propagated_inputs / np.sqrt(
+            np.sum(np.abs(propagated_inputs) ** 2, axis=1, keepdims=True) * self.dt
+        )
+
+        overlap_cross = np.abs(
+            np.sum(green_cross.conj() * output_fields_normalized, axis=1) * self.dt
+        ) ** 2
+        overlap_self = np.abs(
+            np.sum(green_self.conj() * propagated_inputs_normalized, axis=1) * self.dt
+        ) ** 2
+
+        return np.column_stack((overlap_cross, overlap_self)).astype(float, copy=False)
 
     def check_schmidt_numbers(self, rho: FloatArray, nu: FloatArray) -> FloatArray:
         return rho**2 - nu**2
