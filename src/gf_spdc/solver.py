@@ -297,6 +297,145 @@ class CoupledModes:
         state = np.hstack((np.real(self.As_0), np.imag(self.As_0), np.real(self.Ai_0), np.imag(self.Ai_0)))
         return n_save, state, 0.0
 
+    def _state_to_complex(
+        self, state: NDArray[np.float64]
+    ) -> tuple[ComplexArray, ComplexArray]:
+        fields = np.reshape(state, (4, self.N))
+        return fields[0] + 1j * fields[1], fields[2] + 1j * fields[3]
+
+    def _complex_to_state(
+        self, as_interaction: ComplexArray, ai_interaction: ComplexArray
+    ) -> NDArray[np.float64]:
+        return np.hstack(
+            (
+                np.real(as_interaction),
+                np.imag(as_interaction),
+                np.real(ai_interaction),
+                np.imag(ai_interaction),
+            )
+        )
+
+    def _prepare_rk4_stage_cache(
+        self, n_save: int
+    ) -> list[
+        tuple[
+            tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, float],
+            tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, float],
+            tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, float],
+            tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, float],
+        ]
+    ]:
+        z_values = np.arange(n_save, dtype=float) * self.dz
+        half_step = z_values + 0.5 * self.dz
+        full_step = z_values + self.dz
+
+        signal_phase_scale = 1j * (self.betas + 1j * self.alpha_s)
+        idler_phase_scale = 1j * (self.betai + 1j * self.alpha_i)
+
+        def stage_data(z_axis: FloatArray) -> tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, FloatArray]:
+            signal_forward = np.exp(np.outer(z_axis, signal_phase_scale))
+            idler_forward = np.exp(np.outer(z_axis, idler_phase_scale))
+            signal_backward = np.exp(np.outer(z_axis, -signal_phase_scale))
+            idler_backward = np.exp(np.outer(z_axis, -idler_phase_scale))
+            pump_time = np.array([self.ifft(self.Ap_0 * np.exp(1j * self.betap * z)) for z in z_axis])
+            qpm_values = np.array([self.qpm(float(z)) for z in z_axis], dtype=float)
+            return signal_forward, idler_forward, signal_backward, idler_backward, pump_time, qpm_values
+
+        start_stage = stage_data(z_values)
+        half_stage = stage_data(half_step)
+        end_stage = stage_data(full_step)
+        return [
+            (
+                (
+                    start_stage[0][index],
+                    start_stage[1][index],
+                    start_stage[2][index],
+                    start_stage[3][index],
+                    start_stage[4][index],
+                    float(start_stage[5][index]),
+                ),
+                (
+                    half_stage[0][index],
+                    half_stage[1][index],
+                    half_stage[2][index],
+                    half_stage[3][index],
+                    half_stage[4][index],
+                    float(half_stage[5][index]),
+                ),
+                (
+                    half_stage[0][index],
+                    half_stage[1][index],
+                    half_stage[2][index],
+                    half_stage[3][index],
+                    half_stage[4][index],
+                    float(half_stage[5][index]),
+                ),
+                (
+                    end_stage[0][index],
+                    end_stage[1][index],
+                    end_stage[2][index],
+                    end_stage[3][index],
+                    end_stage[4][index],
+                    float(end_stage[5][index]),
+                ),
+            )
+            for index in range(n_save)
+        ]
+
+    def _ode_nl_complex(
+        self,
+        as_interaction: ComplexArray,
+        ai_interaction: ComplexArray,
+        signal_forward: ComplexArray,
+        idler_forward: ComplexArray,
+        signal_backward: ComplexArray,
+        idler_backward: ComplexArray,
+        pump_time: ComplexArray,
+        qpm: float,
+    ) -> tuple[ComplexArray, ComplexArray]:
+        as_field = self.ifft(as_interaction * signal_forward)
+        ai_field = self.ifft(ai_interaction * idler_forward)
+
+        nas = 1j * self.gamma * np.conjugate(ai_field) * pump_time * qpm
+        nai = 1j * self.gamma * np.conjugate(as_field) * pump_time * qpm
+
+        das = signal_backward * self.fft(nas)
+        dai = idler_backward * self.fft(nai)
+        return das, dai
+
+    def _rk4_step_complex(
+        self,
+        as_interaction: ComplexArray,
+        ai_interaction: ComplexArray,
+        stage_values: tuple[
+            tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, float],
+            tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, float],
+            tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, float],
+            tuple[ComplexArray, ComplexArray, ComplexArray, ComplexArray, ComplexArray, float],
+        ],
+        dz: float,
+    ) -> tuple[ComplexArray, ComplexArray]:
+        k1_as, k1_ai = self._ode_nl_complex(as_interaction, ai_interaction, *stage_values[0])
+        k2_as, k2_ai = self._ode_nl_complex(
+            as_interaction + 0.5 * dz * k1_as,
+            ai_interaction + 0.5 * dz * k1_ai,
+            *stage_values[1],
+        )
+        k3_as, k3_ai = self._ode_nl_complex(
+            as_interaction + 0.5 * dz * k2_as,
+            ai_interaction + 0.5 * dz * k2_ai,
+            *stage_values[2],
+        )
+        k4_as, k4_ai = self._ode_nl_complex(
+            as_interaction + dz * k3_as,
+            ai_interaction + dz * k3_ai,
+            *stage_values[3],
+        )
+        return (
+            as_interaction + dz * (k1_as + 2 * k2_as + 2 * k3_as + k4_as) / 6.0,
+            ai_interaction + dz * (k1_ai + 2 * k2_ai + 2 * k3_ai + k4_ai) / 6.0,
+        )
+
     def ode_nl(self, z: float, field_interaction: NDArray[np.float64]) -> NDArray[np.float64]:
         field_interaction = np.reshape(field_interaction, (4, self.N))
         as_real, as_imag, ai_real, ai_imag = field_interaction
@@ -330,6 +469,9 @@ class CoupledModes:
         start_time = time.time()
 
         time_left = 0.0
+        if self.integration_method == "rk4":
+            as_interaction, ai_interaction = self._state_to_complex(state)
+            rk4_stage_cache = self._prepare_rk4_stage_cache(n_save)
         for step_index in range(1, n_save + 1):
             step_start = time.time()
             if self.print_bool:
@@ -343,7 +485,13 @@ class CoupledModes:
                 self.solver.integrate(z_out[step_index - 1] + self.dz)
                 state = self.solver.y
             else:
-                state = self.rk4_step(z_current, state, self.dz)
+                as_interaction, ai_interaction = self._rk4_step_complex(
+                    as_interaction,
+                    ai_interaction,
+                    rk4_stage_cache[step_index - 1],
+                    self.dz,
+                )
+                state = self._complex_to_state(as_interaction, ai_interaction)
             z_current += self.dz
 
             fields = np.reshape(state, (4, self.N))
@@ -368,12 +516,23 @@ class CoupledModes:
         )
         _, _, input_field_time = self.save_variables(0, initial_state)
 
+        if self.integration_method == "rk4":
+            as_interaction, ai_interaction = self._state_to_complex(state)
+            rk4_stage_cache = self._prepare_rk4_stage_cache(n_save)
+
         for _ in range(1, n_save + 1):
             if self.integration_method == "adaptive":
                 self.solver.integrate(z_current + self.dz)
                 state = self.solver.y
             else:
-                state = self.rk4_step(z_current, state, self.dz)
+                step_index = int(np.round(z_current / self.dz))
+                as_interaction, ai_interaction = self._rk4_step_complex(
+                    as_interaction,
+                    ai_interaction,
+                    rk4_stage_cache[step_index],
+                    self.dz,
+                )
+                state = self._complex_to_state(as_interaction, ai_interaction)
             z_current += self.dz
 
         fields = np.reshape(state, (4, self.N))
