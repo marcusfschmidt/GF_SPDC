@@ -35,9 +35,15 @@ class OverlapTask:
 
 
 def _parallel_green(
-    args: tuple[ComplexArray, FloatArray, ComplexArray],
+    args: tuple[ComplexArray, FloatArray, ComplexArray] | tuple[ComplexArray, FloatArray, ComplexArray, int],
 ) -> ComplexArray:
-    v_modes, rho_values, u_modes = args
+    if len(args) == 3:
+        v_modes, rho_values, u_modes = args
+        input_shift = 0
+    else:
+        v_modes, rho_values, u_modes, input_shift = args
+    if input_shift != 0:
+        u_modes = np.roll(u_modes, input_shift, axis=1)
     return np.asarray(
         (v_modes * rho_values[:, np.newaxis]).T @ u_modes.conj(), dtype=complex
     )
@@ -348,18 +354,22 @@ class GreenFunctionsExtractor:
         self,
         args: tuple[Any, ...],
         indistinguishable_bool: bool,
+        input_shifts: tuple[int, ...],
     ) -> tuple[ComplexArray, ...]:
         self.debug_print("Extracting Green's functions...", end="\n")
         if indistinguishable_bool:
             us, vi, uss, vss, rho_cross, rho_self = args
-            args_list = [(vi, rho_cross, us), (vss, rho_self, uss)]
+            args_list = [
+                (vi, rho_cross, us, input_shifts[0]),
+                (vss, rho_self, uss, input_shifts[1]),
+            ]
         else:
             us, vs, ui, vi, uss, vss, uii, vii, rho_cross, rho_self = args
             args_list = [
-                (vi, rho_cross, us),
-                (vii, rho_self, uii),
-                (vs, rho_cross, ui),
-                (vss, rho_self, uss),
+                (vi, rho_cross, us, input_shifts[0]),
+                (vii, rho_self, uii, input_shifts[1]),
+                (vs, rho_cross, ui, input_shifts[2]),
+                (vss, rho_self, uss, input_shifts[3]),
             ]
 
         results = [_parallel_green(arg_set) for arg_set in args_list]
@@ -461,19 +471,21 @@ class GreenFunctionsExtractor:
                     signal_rho,
                     self_rhos,
                 )
+                input_shifts = (
+                    round((2 * ts) / self.dt),
+                    round((2 * ti) / self.dt),
+                    round((2 * ti) / self.dt),
+                    round((2 * ts) / self.dt),
+                )
                 green_start = perf_counter()
                 result_full = self.extract_green_functions(
-                    args_tuple_full, indistinguishable_bool
+                    args_tuple_full, indistinguishable_bool, input_shifts
                 )
                 green_time = perf_counter() - green_start
                 g_is = result_full[0]
                 g_ii = result_full[1]
                 g_si = result_full[2]
                 g_ss = result_full[3]
-                g_is = np.roll(g_is, round((2 * ts) / self.dt), axis=1)
-                g_ss = np.roll(g_ss, round((2 * ts) / self.dt), axis=1)
-                g_ii = np.roll(g_ii, round((2 * ti) / self.dt), axis=1)
-                g_si = np.roll(g_si, round((2 * ti) / self.dt), axis=1)
                 g_tuple = (g_is, g_ii, g_si, g_ss)
                 assemble_time = perf_counter() - assemble_start
 
@@ -512,15 +524,17 @@ class GreenFunctionsExtractor:
                     idler_rho,
                     self_rhos,
                 )
+                input_shifts = (
+                    round((2 * ti) / self.dt),
+                    round((2 * ti) / self.dt),
+                )
                 green_start = perf_counter()
                 result_simple = self.extract_green_functions(
-                    args_tuple_simple, indistinguishable_bool
+                    args_tuple_simple, indistinguishable_bool, input_shifts
                 )
                 green_time = perf_counter() - green_start
                 g_field = result_simple[0]
                 f_field = result_simple[1]
-                g_field = np.roll(g_field, round((2 * ti) / self.dt), axis=1)
-                f_field = np.roll(f_field, round((2 * ti) / self.dt), axis=1)
                 g_tuple = (g_field, f_field)
                 assemble_time = perf_counter() - assemble_start
 
