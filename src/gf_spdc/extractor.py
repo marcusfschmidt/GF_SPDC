@@ -7,6 +7,7 @@ from typing import Any, Sequence
 import numpy as np
 from numpy.linalg import svd
 from numpy.typing import NDArray
+from tqdm import tqdm
 
 from .solver import CoupledModes
 
@@ -67,7 +68,6 @@ def _parallel_extract(
     _, _, _, _, _, field_time = cnlse.run()
     input_field = field_time[0, :, :]
     output_field = field_time[-1, :, :]
-    # print(f"Finished k = {task.basis_order}")
     return (
         input_field[:, task.in_index],
         output_field[:, task.out_index],
@@ -214,8 +214,15 @@ class GreenFunctionsExtractor:
         ]
 
         with _make_pool() as pool:
-            results = pool.map(
-                _parallel_extract, [(task, self.parameters_array) for task in tasks]
+            results = list(
+                tqdm(
+                    pool.imap_unordered(
+                        _parallel_extract,
+                        [(task, self.parameters_array) for task in tasks],
+                    ),
+                    total=len(tasks),
+                    desc="Extracting modes",
+                )
             )
 
         b_cross = np.zeros((self.kmax, self.time_len), dtype=complex)
