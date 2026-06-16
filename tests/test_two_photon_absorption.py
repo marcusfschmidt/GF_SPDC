@@ -31,7 +31,9 @@ def _coherent_overlap_contribution_reference(
 ) -> float:
     alpha = gamma - 1j * omega_fg
     f1 = np.asarray((f1g2 @ np.transpose(f1g1)) * domega, dtype=complex)
+    f1 = np.fliplr(f1)
     f2 = np.asarray((f2g2 @ np.transpose(f2g1)) * domega, dtype=complex)
+    f2 = np.fliplr(f2)
 
     omega_s = np.arange(-len(omega), len(omega), dtype=float) * domega
     h = np.zeros(2 * len(omega), dtype=complex)
@@ -164,7 +166,9 @@ def make_inputs() -> IndistinguishableTPAInputs:
         dtype=complex,
     )
     omega = np.array([-0.5, 0.5], dtype=float)
-    return IndistinguishableTPAInputs(g=g, f=f, omega=omega, domega=1.0, gamma=2.0)
+    return IndistinguishableTPAInputs(
+        g=g, f=f, omega=omega, domega=1.0, transition_linewidth=2.0
+    )
 
 
 def test_indistinguishable_overlap_uses_three_specified_contributions() -> None:
@@ -178,7 +182,7 @@ def test_indistinguishable_overlap_uses_three_specified_contributions() -> None:
         inputs.f,
         inputs.omega,
         inputs.domega,
-        inputs.gamma,
+        inputs.transition_linewidth,
         inputs.omega_fg,
     )
 
@@ -189,7 +193,7 @@ def test_indistinguishable_overlap_uses_three_specified_contributions() -> None:
         np.conj(inputs.g),
         inputs.omega,
         inputs.domega,
-        inputs.gamma,
+        inputs.transition_linewidth,
         inputs.omega_fg,
     )
 
@@ -200,7 +204,7 @@ def test_indistinguishable_overlap_uses_three_specified_contributions() -> None:
         np.conj(inputs.g),
         inputs.omega,
         inputs.domega,
-        inputs.gamma,
+        inputs.transition_linewidth,
         inputs.omega_fg,
     )
 
@@ -217,7 +221,7 @@ def test_indistinguishable_h_functions_store_weighted_h_vectors() -> None:
         inputs.f,
         inputs.omega,
         inputs.domega,
-        inputs.gamma,
+        inputs.transition_linewidth,
         inputs.omega_fg,
     )
 
@@ -327,7 +331,7 @@ def test_tpa_input_validation_rejects_shape_mismatch() -> None:
                 f=np.ones((3, 3), dtype=complex),
                 omega=inputs.omega,
                 domega=inputs.domega,
-                gamma=inputs.gamma,
+                transition_linewidth=inputs.transition_linewidth,
             )
         )
 
@@ -341,7 +345,7 @@ def test_tpa_input_validation_rejects_non_positive_domega() -> None:
                 f=inputs.f,
                 omega=inputs.omega,
                 domega=0.0,
-                gamma=inputs.gamma,
+                transition_linewidth=inputs.transition_linewidth,
             )
         )
 
@@ -355,7 +359,7 @@ def test_tpa_input_validation_rejects_non_positive_gamma() -> None:
                 f=inputs.f,
                 omega=inputs.omega,
                 domega=inputs.domega,
-                gamma=0.0,
+                transition_linewidth=0.0,
             )
         )
 
@@ -369,7 +373,7 @@ def test_tpa_input_validation_rejects_nonuniform_omega_grid() -> None:
                 f=inputs.f,
                 omega=np.array([-0.5, 0.7], dtype=float),
                 domega=1.0,
-                gamma=inputs.gamma,
+                transition_linewidth=inputs.transition_linewidth,
             )
         )
 
@@ -384,6 +388,6 @@ def test_tpa_rejects_singular_g2_denominator() -> None:
                 f=np.eye(2, dtype=complex),
                 omega=omega,
                 domega=1.0,
-                gamma=1.0,
+                transition_linewidth=1.0,
             )
         )

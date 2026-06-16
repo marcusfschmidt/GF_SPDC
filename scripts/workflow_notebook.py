@@ -107,10 +107,12 @@ gamma_results = run_gamma_sweep(
     stitch_print_bool=False,
 )
 
+transition_linewidth = 1.0
+
 
 # %%
 # Optional: compute 2PA for a single stitched file
-tpa_result = run_tpa_from_file(saved_name)
+tpa_result = run_tpa_from_file(saved_name, transition_linewidth=transition_linewidth)
 
 # %%
 from matplotlib import pyplot as plt

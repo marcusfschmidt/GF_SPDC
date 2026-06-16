@@ -56,7 +56,7 @@ def _extract_gamma(parameter_array: object) -> float:
 def build_tpa_inputs(
     filename: str | Path | None = None,
     *,
-    gamma: float | None = None,
+    transition_linewidth: float | None = None,
     omega_fg: float = 0.0,
 ) -> IndistinguishableTPAInputs:
     """Build `IndistinguishableTPAInputs` from a stitched Green's file."""
@@ -67,21 +67,28 @@ def build_tpa_inputs(
     f = fft2_shifted(np.asarray(green_functions[1]))
     omega = np.asarray(omega, dtype=float)
     domega = float(omega[1] - omega[0]) if omega.size > 1 else 1.0
-    if gamma is None:
-        gamma = _extract_gamma(parameter_array)
+    if transition_linewidth is None:
+        transition_linewidth = _extract_gamma(parameter_array)
     return IndistinguishableTPAInputs(
-        g=g, f=f, omega=omega, domega=domega, gamma=gamma, omega_fg=omega_fg
+        g=g,
+        f=f,
+        omega=omega,
+        domega=domega,
+        transition_linewidth=transition_linewidth,
+        omega_fg=omega_fg,
     )
 
 
 def run_tpa_from_file(
     filename: str | Path | None = None,
     *,
-    gamma: float | None = None,
+    transition_linewidth: float | None = None,
     omega_fg: float = 0.0,
 ) -> TPAContributionBreakdown:
     """Load stitched Green's functions and compute the 2PA overlap."""
-    inputs = build_tpa_inputs(filename, gamma=gamma, omega_fg=omega_fg)
+    inputs = build_tpa_inputs(
+        filename, transition_linewidth=transition_linewidth, omega_fg=omega_fg
+    )
     result = calculate_indistinguishable_tpa_overlap(inputs)
 
     print("coherent:", result.coherent)
