@@ -98,19 +98,6 @@ def build_default_params(
     )
 
 
-def _extract_gamma(parameter_array: object) -> float:
-    if hasattr(parameter_array, "gamma"):
-        return float(getattr(parameter_array, "gamma"))
-    if isinstance(parameter_array, np.ndarray):
-        if parameter_array.ndim == 0:
-            parameter_array = cast(Any, parameter_array).item()
-        else:
-            parameter_array = cast(Any, parameter_array).tolist()
-    if isinstance(parameter_array, (list, tuple)) and len(parameter_array) > 5:
-        return float(cast(Any, parameter_array[5]))
-    raise ValueError("Could not extract gamma from parameter payload.")
-
-
 def _extract_schmidt_number_from_stitched(
     green_functions: tuple[np.ndarray, ...],
 ) -> float:
@@ -178,6 +165,7 @@ def _calculate_2pa(
 def run_gamma_sweep(
     gammas: np.ndarray,
     *,
+    transition_linewidth: float,
     type: str = "typeII",
     length: float = 4000e-6,
     n: int = 12,
@@ -246,7 +234,7 @@ def run_gamma_sweep(
         tpa_inputs = _build_tpa_inputs(
             green_functions,
             stitcher.omega,
-            float(gamma),
+            transition_linewidth,
             omega_fg,
             indistinguishable_bool,
         )
