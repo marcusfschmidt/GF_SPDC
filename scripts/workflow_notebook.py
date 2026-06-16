@@ -34,6 +34,7 @@ plot_stitched(saved_name)
 # %%
 # Run a gamma sweep for 2PA
 gammas = np.logspace(-5, 2, num=15)  # 11 points from 1e-5 to 10, log spaced
+gammas = [100]
 gamma_results = run_gamma_sweep(
     gammas,
     type="typeII",
@@ -60,8 +61,13 @@ incoherent_total = np.array([result.incoherent_total for result in gamma_results
 factor = 5
 tpa_rate = factor * (coherent + incoherent_total)
 
-plt.plot(photon_number_array / schmidt_number_array, tpa_rate, marker="o")
+plt.plot(photon_number_array / schmidt_number_array, coherent, marker="o")
 # log x, y
 plt.xscale("log")
 plt.yscale("log")
+plt.show()
+
+# %%
+h = np.array([result.h_function for result in gamma_results])
+plt.plot(np.abs(h[0].coherent) ** 2)
 plt.show()

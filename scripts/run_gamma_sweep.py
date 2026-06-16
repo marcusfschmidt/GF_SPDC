@@ -23,6 +23,7 @@ import warnings
 import numpy as np
 
 from gf_spdc.extractor import GreenFunctionsExtractor
+from gf_spdc.loader import fft2_shifted
 from gf_spdc.mgo_lithium_niobate_type0_beta import MgOLithiumNiobateType0
 from gf_spdc.mgo_lithium_niobate_type2_beta import MgOLithiumNiobateType2
 from gf_spdc.stitcher import GreenFunctionStitcher, StitcherParameters
@@ -129,10 +130,10 @@ def _build_tpa_inputs(
     omega_fg: float,
     indistinguishable_bool: bool,
 ) -> DistinguishableTPAInputs:
-    g_is = np.asarray(green_functions[0])
-    g_ii = np.asarray(green_functions[1]) if len(green_functions) > 1 else g_is
-    g_si = np.asarray(green_functions[2]) if len(green_functions) > 2 else g_is
-    g_ss = np.asarray(green_functions[3]) if len(green_functions) > 3 else g_ii
+    g_is = fft2_shifted(np.asarray(green_functions[0]))
+    g_ii = fft2_shifted(np.asarray(green_functions[1])) if len(green_functions) > 1 else g_is
+    g_si = fft2_shifted(np.asarray(green_functions[2])) if len(green_functions) > 2 else g_is
+    g_ss = fft2_shifted(np.asarray(green_functions[3])) if len(green_functions) > 3 else g_ii
     omega = np.asarray(omega, dtype=float)
     domega = float(omega[1] - omega[0]) if omega.size > 1 else 1.0
 

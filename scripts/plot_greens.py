@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from gf_spdc.loader import add_padding_to_width, fft2_shifted, remove_zero_values
 
 
-DEFAULT_FILENAME = "stitchedGreens_typeII_gamma 1e-05_T0p 10_L 0.004.npy"
+DEFAULT_FILENAME = "stitchedGreens_type0_gamma 1e-05_T0p 2.0_L 0.004.npy"
 
 
 def crop_to_support(
@@ -17,7 +17,7 @@ def crop_to_support(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Trim the low-support borders from a 2D field for plotting."""
     support = np.abs(field) ** 2
-    threshold = float(np.mean(support)) * 0.1
+    threshold = float(np.mean(support)) * 0
     row_indices, col_indices = np.where(support > threshold)
     if row_indices.size == 0 or col_indices.size == 0:
         return field, x_axis, y_axis

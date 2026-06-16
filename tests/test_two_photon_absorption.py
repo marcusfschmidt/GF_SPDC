@@ -3,13 +3,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from gf_spdc.loader import fft2_shifted
 from gf_spdc.two_photon_absorption import IndistinguishableTPAInputs, calculate_indistinguishable_tpa_overlap
 from gf_spdc.two_photon_absorption import (
     _coherent_overlap_contribution,
+    _coherent_h_function_prepared,
     _g2_denominator,
     _g2_numerator,
+    _incoherent_type1_h_function_prepared,
+    _incoherent_type2_h_function_prepared,
     _incoherent_overlap_contribution_type1,
     _incoherent_overlap_contribution_type2,
+    _overlap_indices,
+    _prepare_overlap_terms,
 )
 
 
@@ -204,6 +210,53 @@ def test_indistinguishable_overlap_uses_three_specified_contributions() -> None:
     np.testing.assert_allclose(result.incoherent_type1, incoherent_type1_expected)
     np.testing.assert_allclose(result.incoherent_type2, incoherent_type2_expected)
     np.testing.assert_allclose(result.total, coherent_expected + incoherent_type1_expected + incoherent_type2_expected)
+
+
+def test_indistinguishable_h_functions_store_weighted_h_vectors() -> None:
+    inputs = make_inputs()
+    prepared = _prepare_overlap_terms(
+        inputs.g,
+        inputs.f,
+        inputs.omega,
+        inputs.domega,
+        inputs.gamma,
+        inputs.omega_fg,
+    )
+
+    coherent_h = _coherent_h_function_prepared(prepared, inputs.domega)
+    incoherent_type1_h = _incoherent_type1_h_function_prepared(prepared, inputs.domega)
+    incoherent_type2_h = _incoherent_type2_h_function_prepared(prepared, inputs.domega)
+
+    np.testing.assert_allclose(
+        coherent_h,
+        np.asarray(prepared.coherent_projection_fg * prepared.coherent_denominator * inputs.domega, dtype=complex),
+    )
+    np.testing.assert_allclose(
+        incoherent_type1_h,
+        np.asarray(prepared.diagonal_projection_gg * inputs.domega, dtype=complex),
+    )
+
+    overlap_indices = _overlap_indices(prepared.gg_pair.shape[0])
+    expected_type2 = np.zeros(2 * prepared.gg_pair.shape[0], dtype=complex)
+    np.add.at(
+        expected_type2,
+        np.asarray(overlap_indices.diagonal_destinations, dtype=int).ravel(),
+        (prepared.gg_pair / prepared.half_alpha_denominator[np.newaxis, :]).ravel(),
+    )
+    expected_type2 *= inputs.domega
+    np.testing.assert_allclose(incoherent_type2_h, expected_type2)
+
+
+def test_fft2_shifted_is_the_expected_domain_transform() -> None:
+    field = np.array(
+        [[1.0 + 0.0j, 2.0 + 0.0j], [3.0 + 0.0j, 4.0 + 0.0j]],
+        dtype=complex,
+    )
+    transformed = fft2_shifted(field)
+
+    assert transformed.shape == field.shape
+    assert transformed.dtype == complex
+    assert not np.allclose(transformed, field)
 
 
 def test_indistinguishable_g2_reduction_matches_expanded_sum() -> None:

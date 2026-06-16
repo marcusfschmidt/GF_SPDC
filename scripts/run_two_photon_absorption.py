@@ -15,6 +15,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from gf_spdc.loader import fft2_shifted
 from gf_spdc.two_photon_absorption import (
     IndistinguishableTPAInputs,
     TPAContributionBreakdown,
@@ -62,8 +63,8 @@ def build_tpa_inputs(
     green_functions, _, _, _, _, omega, _, parameter_array = (
         load_stitched_green_functions(filename)
     )
-    g = np.asarray(green_functions[0])
-    f = np.asarray(green_functions[1])
+    g = fft2_shifted(np.asarray(green_functions[0]))
+    f = fft2_shifted(np.asarray(green_functions[1]))
     omega = np.asarray(omega, dtype=float)
     domega = float(omega[1] - omega[0]) if omega.size > 1 else 1.0
     if gamma is None:

@@ -65,7 +65,7 @@ class DistinguishableTPAInputs:
 
 @dataclass(frozen=True)
 class TPAHFunction:
-    """H-function values used by the 2PA calculation."""
+    """Weighted h-vectors saved from the 2PA overlap contributions."""
 
     coherent: ComplexArray
     incoherent_type1: ComplexArray
@@ -277,15 +277,9 @@ def _incoherent_type1_h_function_prepared(
     prepared: _PreparedOverlapTerms,
     domega: float,
 ) -> ComplexArray:
-    overlap_indices = _overlap_indices(prepared.gg_pair.shape[0])
-    anti_diagonal_denominator = prepared.alpha + 1j * prepared.omega_s[:-1]
-    weighted_forward_projection = _complex_bincount(
-        np.asarray(overlap_indices.forward_difference_indices.ravel(), dtype=int),
-        prepared.gg_pair_conjugate
-        / anti_diagonal_denominator[overlap_indices.anti_diagonal_indices],
-        2 * prepared.gg_pair.shape[0],
-    )
-    return np.asarray(weighted_forward_projection * domega, dtype=complex)
+    h = prepared.diagonal_projection_gg.copy()
+    h *= domega
+    return np.asarray(h, dtype=complex)
 
 
 def _incoherent_overlap_contribution_type2_prepared(
@@ -330,12 +324,7 @@ def _incoherent_type2_h_function_prepared(
         2 * prepared.gg_pair.shape[0],
     )
     h1 *= domega
-    weighted_backward_projection = _complex_bincount(
-        np.asarray(overlap_indices.backward_difference_indices.ravel(), dtype=int),
-        prepared.gg_pair_conjugate / prepared.half_alpha_denominator[np.newaxis, :],
-        2 * prepared.gg_pair.shape[0],
-    )
-    return np.asarray(h1 + weighted_backward_projection, dtype=complex)
+    return np.asarray(h1, dtype=complex)
 
 
 def _coherent_overlap_contribution(
