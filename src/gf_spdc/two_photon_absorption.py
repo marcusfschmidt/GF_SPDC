@@ -28,7 +28,7 @@ class IndistinguishableTPAInputs:
     f: ComplexArray
     omega: FloatArray
     domega: float
-    gamma: float
+    transition_linewidth: float
     omega_fg: float = 0.0
 
 
@@ -59,7 +59,7 @@ class DistinguishableTPAInputs:
     g_ss: ComplexArray
     omega: FloatArray
     domega: float
-    gamma: float
+    transition_linewidth: float
     omega_fg: float = 0.0
 
 
@@ -81,7 +81,7 @@ class _NormalizedTPAInputs:
     f_scale: float
     omega: FloatArray
     domega: float
-    gamma: float
+    transition_linewidth: float
     omega_fg: float
 
 
@@ -134,7 +134,7 @@ def _normalize_tpa_inputs(
     f: ComplexArray,
     omega: FloatArray,
     domega: float,
-    gamma: float,
+    transition_linewidth: float,
     omega_fg: float,
 ) -> _NormalizedTPAInputs:
     g_norm, g_scale = _normalize_green_function(g)
@@ -146,7 +146,7 @@ def _normalize_tpa_inputs(
         f_scale=f_scale,
         omega=np.asarray(omega, dtype=float),
         domega=domega,
-        gamma=gamma,
+        transition_linewidth=transition_linewidth,
         omega_fg=omega_fg,
     )
 
@@ -251,10 +251,10 @@ def _prepare_overlap_terms(
     f: ComplexArray,
     omega: FloatArray,
     domega: float,
-    gamma: float,
+    transition_linewidth: float,
     omega_fg: float,
 ) -> _PreparedOverlapTerms:
-    alpha = gamma - 1j * omega_fg
+    alpha = transition_linewidth - 1j * omega_fg
     size = g.shape[0]
     omega_s = np.arange(-size, size, dtype=float) * domega
     half_alpha_denominator = alpha / 2 + 1j * omega
@@ -456,10 +456,10 @@ def _coherent_overlap_contribution(
     f2g2: ComplexArray,
     omega: FloatArray,
     domega: float,
-    gamma: float,
+    transition_linewidth: float,
     omega_fg: float,
 ) -> float:
-    alpha = gamma - 1j * omega_fg
+    alpha = transition_linewidth - 1j * omega_fg
     f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=False)
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=False)
 
@@ -495,10 +495,10 @@ def _incoherent_overlap_contribution_type1(
     f2g2: ComplexArray,
     omega: FloatArray,
     domega: float,
-    gamma: float,
+    transition_linewidth: float,
     omega_fg: float,
 ) -> float:
-    alpha = gamma - 1j * omega_fg
+    alpha = transition_linewidth - 1j * omega_fg
     f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=True)
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
@@ -532,10 +532,10 @@ def _incoherent_overlap_contribution_type2(
     f2g2: ComplexArray,
     omega: FloatArray,
     domega: float,
-    gamma: float,
+    transition_linewidth: float,
     omega_fg: float,
 ) -> float:
-    alpha = gamma - 1j * omega_fg
+    alpha = transition_linewidth - 1j * omega_fg
     f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=True)
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
@@ -611,8 +611,8 @@ def calculate_indistinguishable_tpa_overlap(
     _validate_inputs(inputs.g, inputs.f, inputs.omega)
     if not np.isfinite(inputs.domega) or inputs.domega <= 0:
         raise ValueError("domega must be finite and positive.")
-    if not np.isfinite(inputs.gamma) or inputs.gamma <= 0:
-        raise ValueError("gamma must be finite and positive.")
+    if not np.isfinite(inputs.transition_linewidth) or inputs.transition_linewidth <= 0:
+        raise ValueError("transition_linewidth must be finite and positive.")
     if not np.isfinite(inputs.omega_fg):
         raise ValueError("omega_fg must be finite.")
     if len(inputs.omega) > 1 and not np.allclose(np.diff(inputs.omega), inputs.domega):
@@ -623,7 +623,7 @@ def calculate_indistinguishable_tpa_overlap(
         inputs.f,
         inputs.omega,
         inputs.domega,
-        inputs.gamma,
+        inputs.transition_linewidth,
         inputs.omega_fg,
     )
     g_conjugate = np.conj(normalized.g)
@@ -633,7 +633,7 @@ def calculate_indistinguishable_tpa_overlap(
         normalized.f,
         normalized.omega,
         normalized.domega,
-        normalized.gamma,
+        normalized.transition_linewidth,
         normalized.omega_fg,
     )
 
@@ -716,7 +716,7 @@ def calculate_distinguishable_tpa_overlap(
         f=inputs.g_ii,
         omega=inputs.omega,
         domega=inputs.domega,
-        gamma=inputs.gamma,
+        transition_linewidth=inputs.transition_linewidth,
         omega_fg=inputs.omega_fg,
     )
     breakdown = calculate_indistinguishable_tpa_overlap(shared)
@@ -725,7 +725,7 @@ def calculate_distinguishable_tpa_overlap(
         inputs.g_ii,
         inputs.omega,
         inputs.domega,
-        inputs.gamma,
+        inputs.transition_linewidth,
         inputs.omega_fg,
     )
     h_function = TPAHFunction(
