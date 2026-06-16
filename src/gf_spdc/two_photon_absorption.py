@@ -31,6 +31,29 @@ class IndistinguishableTPAInputs:
     transition_linewidth: float
     omega_fg: float = 0.0
 
+    def __init__(
+        self,
+        g: ComplexArray,
+        f: ComplexArray,
+        omega: FloatArray,
+        domega: float,
+        transition_linewidth: float | None = None,
+        omega_fg: float = 0.0,
+        gamma: float | None = None,
+    ) -> None:
+        if transition_linewidth is None:
+            if gamma is None:
+                raise TypeError(
+                    "IndistinguishableTPAInputs requires transition_linewidth."
+                )
+            transition_linewidth = gamma
+        object.__setattr__(self, "g", g)
+        object.__setattr__(self, "f", f)
+        object.__setattr__(self, "omega", omega)
+        object.__setattr__(self, "domega", domega)
+        object.__setattr__(self, "transition_linewidth", transition_linewidth)
+        object.__setattr__(self, "omega_fg", omega_fg)
+
 
 @dataclass(frozen=True)
 class TPAContributionBreakdown:
@@ -61,6 +84,33 @@ class DistinguishableTPAInputs:
     domega: float
     transition_linewidth: float
     omega_fg: float = 0.0
+
+    def __init__(
+        self,
+        g_is: ComplexArray,
+        g_ii: ComplexArray,
+        g_si: ComplexArray,
+        g_ss: ComplexArray,
+        omega: FloatArray,
+        domega: float,
+        transition_linewidth: float | None = None,
+        omega_fg: float = 0.0,
+        gamma: float | None = None,
+    ) -> None:
+        if transition_linewidth is None:
+            if gamma is None:
+                raise TypeError(
+                    "DistinguishableTPAInputs requires transition_linewidth."
+                )
+            transition_linewidth = gamma
+        object.__setattr__(self, "g_is", g_is)
+        object.__setattr__(self, "g_ii", g_ii)
+        object.__setattr__(self, "g_si", g_si)
+        object.__setattr__(self, "g_ss", g_ss)
+        object.__setattr__(self, "omega", omega)
+        object.__setattr__(self, "domega", domega)
+        object.__setattr__(self, "transition_linewidth", transition_linewidth)
+        object.__setattr__(self, "omega_fg", omega_fg)
 
 
 @dataclass(frozen=True)
