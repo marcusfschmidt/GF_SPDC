@@ -156,23 +156,40 @@ def _rescale_breakdown(
     g_scale: float,
     f_scale: float,
 ) -> TPAContributionBreakdown:
-    scale_coherent = f_scale * g_scale * f_scale * g_scale
-    scale_type1 = f_scale * g_scale * g_scale * g_scale
-    scale_type2 = f_scale * g_scale * g_scale * g_scale
-    scale_total = scale_coherent + scale_type1 + scale_type2
+    def apply_scale(value: complex | float, scale: float, power: int) -> complex | float:
+        result: complex | float = value
+        for _ in range(power):
+            result = result * scale
+        return result
+
+    coherent_scale = apply_scale(apply_scale(breakdown.coherent, g_scale, 2), f_scale, 2)
+    incoherent_scale = apply_scale(breakdown.incoherent_type1, g_scale, 4)
+    g2_cross_scale = apply_scale(apply_scale(1.0, g_scale, 2), f_scale, 2)
+    g2_same_scale = apply_scale(1.0, g_scale, 4)
+
+    g2_denominator_single = apply_scale(breakdown.g2_denominator_single, g_scale, 2)
+    g2_denominator = g2_denominator_single * g2_denominator_single
+    g2_numerator_single_cross = breakdown.g2_numerator_single_cross * g2_cross_scale
+    g2_numerator_single_same = breakdown.g2_numerator_single_same * g2_same_scale
+    g2_numerator = (
+        g2_numerator_single_cross + g2_numerator_single_same + g2_numerator_single_same
+    )
 
     return TPAContributionBreakdown(
-        coherent=breakdown.coherent * scale_coherent,
-        incoherent_type1=breakdown.incoherent_type1 * scale_type1,
-        incoherent_type2=breakdown.incoherent_type2 * scale_type2,
-        incoherent_total=breakdown.incoherent_total * scale_type1 + breakdown.incoherent_type2 * scale_type2,
-        total=breakdown.total * scale_total,
-        g2_numerator_single_cross=breakdown.g2_numerator_single_cross * scale_coherent,
-        g2_numerator_single_same=breakdown.g2_numerator_single_same * scale_type1,
-        g2_numerator=breakdown.g2_numerator * scale_total,
-        g2_denominator_single=breakdown.g2_denominator_single * (g_scale**4),
-        g2_denominator=breakdown.g2_denominator * (g_scale**8),
-        g2=breakdown.g2,
+        coherent=float(coherent_scale),
+        incoherent_type1=float(incoherent_scale),
+        incoherent_type2=float(apply_scale(breakdown.incoherent_type2, g_scale, 4)),
+        incoherent_total=float(
+            apply_scale(breakdown.incoherent_type1, g_scale, 4)
+            + apply_scale(breakdown.incoherent_type2, g_scale, 4)
+        ),
+        total=float(coherent_scale + apply_scale(breakdown.incoherent_type1, g_scale, 4) + apply_scale(breakdown.incoherent_type2, g_scale, 4)),
+        g2_numerator_single_cross=complex(g2_numerator_single_cross),
+        g2_numerator_single_same=complex(g2_numerator_single_same),
+        g2_numerator=complex(g2_numerator),
+        g2_denominator_single=complex(g2_denominator_single),
+        g2_denominator=complex(g2_denominator),
+        g2=complex(g2_numerator / g2_denominator),
     )
 
 
@@ -662,33 +679,22 @@ def calculate_indistinguishable_tpa_overlap(
         )
     g2_value = g2_numerator / g2_denominator
 
-    g_scale = normalized.g_scale
-    f_scale = normalized.f_scale
-    coherent *= g_scale**2 * f_scale**2
-    incoherent_type1 *= g_scale**4
-    incoherent_type2 *= g_scale**4
-    incoherent_total = incoherent_type1 + incoherent_type2
-    g2_numerator_single_cross *= g_scale**2 * f_scale**2
-    g2_numerator_single_same *= g_scale**4
-    g2_numerator = (
-        g2_numerator_single_cross + g2_numerator_single_same + g2_numerator_single_same
-    )
-    g2_denominator_single *= g_scale**2
-    g2_denominator = g2_denominator_single**2
-    g2_value = g2_numerator / g2_denominator
-
-    return TPAContributionBreakdown(
-        coherent=coherent,
-        incoherent_type1=incoherent_type1,
-        incoherent_type2=incoherent_type2,
-        incoherent_total=incoherent_total,
-        total=coherent + incoherent_total,
-        g2_numerator_single_cross=g2_numerator_single_cross,
-        g2_numerator_single_same=g2_numerator_single_same,
-        g2_numerator=g2_numerator,
-        g2_denominator_single=g2_denominator_single,
-        g2_denominator=g2_denominator,
-        g2=g2_value,
+    return _rescale_breakdown(
+        TPAContributionBreakdown(
+            coherent=coherent,
+            incoherent_type1=incoherent_type1,
+            incoherent_type2=incoherent_type2,
+            incoherent_total=incoherent_total,
+            total=coherent + incoherent_total,
+            g2_numerator_single_cross=g2_numerator_single_cross,
+            g2_numerator_single_same=g2_numerator_single_same,
+            g2_numerator=g2_numerator,
+            g2_denominator_single=g2_denominator_single,
+            g2_denominator=g2_denominator,
+            g2=g2_value,
+        ),
+        normalized.g_scale,
+        normalized.f_scale,
     )
 
 
