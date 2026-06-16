@@ -26,7 +26,8 @@ class ExtractTask:
 
 
 def _parallel_green(
-    args: tuple[ComplexArray, FloatArray, ComplexArray] | tuple[ComplexArray, FloatArray, ComplexArray, int],
+    args: tuple[ComplexArray, FloatArray, ComplexArray]
+    | tuple[ComplexArray, FloatArray, ComplexArray, int],
 ) -> ComplexArray:
     if len(args) == 3:
         v_modes, rho_values, u_modes = args
@@ -360,7 +361,7 @@ class GreenFunctionsExtractor:
         return results
 
     def photon_number(self, cross_green_time: ComplexArray) -> float:
-        n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1)
+        n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1) * self.dt
         return float(np.sum(n_t) * self.dt)
 
     @staticmethod
@@ -368,7 +369,7 @@ class GreenFunctionsExtractor:
         cross_green_time: ComplexArray, dt: float
     ) -> float:
         """Return the photon number for a stitched Green's function."""
-        n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1)
+        n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1) * dt
         return float(np.sum(n_t) * dt)
 
     def calc_overlap(
@@ -403,13 +404,15 @@ class GreenFunctionsExtractor:
         green_cross = (g_cross @ input_fields.T).T * self.dt
         green_self = (g_self @ input_fields.conj().T).T * self.dt
 
-        green_cross_norm = np.sum(
-            np.abs(green_cross) ** 2, axis=1, keepdims=True
-        ) * self.dt
-        green_self_norm = np.sum(
-            np.abs(green_self) ** 2, axis=1, keepdims=True
-        ) * self.dt
-        output_norm = np.sum(np.abs(output_fields) ** 2, axis=1, keepdims=True) * self.dt
+        green_cross_norm = (
+            np.sum(np.abs(green_cross) ** 2, axis=1, keepdims=True) * self.dt
+        )
+        green_self_norm = (
+            np.sum(np.abs(green_self) ** 2, axis=1, keepdims=True) * self.dt
+        )
+        output_norm = (
+            np.sum(np.abs(output_fields) ** 2, axis=1, keepdims=True) * self.dt
+        )
         propagated_norm = (
             np.sum(np.abs(propagated_inputs) ** 2, axis=1, keepdims=True) * self.dt
         )
@@ -439,12 +442,19 @@ class GreenFunctionsExtractor:
             where=propagated_norm > 0.0,
         )
 
-        overlap_cross = np.abs(
-            np.sum(green_cross.conj() * output_fields_normalized, axis=1) * self.dt
-        ) ** 2
-        overlap_self = np.abs(
-            np.sum(green_self.conj() * propagated_inputs_normalized, axis=1) * self.dt
-        ) ** 2
+        overlap_cross = (
+            np.abs(
+                np.sum(green_cross.conj() * output_fields_normalized, axis=1) * self.dt
+            )
+            ** 2
+        )
+        overlap_self = (
+            np.abs(
+                np.sum(green_self.conj() * propagated_inputs_normalized, axis=1)
+                * self.dt
+            )
+            ** 2
+        )
 
         return np.column_stack((overlap_cross, overlap_self)).astype(float, copy=False)
 
@@ -469,7 +479,11 @@ class GreenFunctionsExtractor:
         normalized = singular_values / scale
         numerator = float(np.sum(normalized**2) ** 2)
         denominator = float(np.sum(normalized**4))
-        if denominator <= 0.0 or not np.isfinite(numerator) or not np.isfinite(denominator):
+        if (
+            denominator <= 0.0
+            or not np.isfinite(numerator)
+            or not np.isfinite(denominator)
+        ):
             raise ValueError(
                 "Schmidt number is undefined for the supplied singular values."
             )
@@ -514,9 +528,17 @@ class GreenFunctionsExtractor:
         ) as pool:
             self.debug_print("\nPropagating signal...", end="\n")
             signal_start = perf_counter()
-            u_s, idler_rho, v_i, uss, self_rhos, vss, is_time_array, ti, signal_basis = (
-                self.extract_schmidt_modes(0, pool)
-            )
+            (
+                u_s,
+                idler_rho,
+                v_i,
+                uss,
+                self_rhos,
+                vss,
+                is_time_array,
+                ti,
+                signal_basis,
+            ) = self.extract_schmidt_modes(0, pool)
             signal_time = perf_counter() - signal_start
             self.t_signal_propagated = 2 * ti
 
@@ -573,7 +595,9 @@ class GreenFunctionsExtractor:
                     overlaps_signal = self.calculate_green_overlap(
                         g_si, g_ii, si_time_array
                     )
-                    overlaps_idler = self.calculate_green_overlap(g_is, g_ss, is_time_array)
+                    overlaps_idler = self.calculate_green_overlap(
+                        g_is, g_ss, is_time_array
+                    )
                     overlaps = np.concatenate((overlaps_signal, overlaps_idler), axis=1)
 
                     schmidt_signal = self.check_schmidt_numbers(self_rhos, idler_rho)
@@ -611,7 +635,9 @@ class GreenFunctionsExtractor:
                 if check_bool:
                     print(f"Photon number from G: {self.photon_number(g_field)}")
                     print("Calculating overlaps and Schmidt numbers...")
-                    overlaps = self.calculate_green_overlap(g_field, f_field, is_time_array)
+                    overlaps = self.calculate_green_overlap(
+                        g_field, f_field, is_time_array
+                    )
                     schmidt_numbers = self.check_schmidt_numbers(self_rhos, idler_rho)
                     print("Finished!")
                 if self.debug_bool:
