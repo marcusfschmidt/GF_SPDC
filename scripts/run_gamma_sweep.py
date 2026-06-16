@@ -117,16 +117,14 @@ def _extract_schmidt_number_from_stitched(
     singular_values_cross = np.linalg.svd(
         np.asarray(green_functions[0]), compute_uv=False
     )
-    singular_values_self = np.linalg.svd(
-        np.asarray(green_functions[1]), compute_uv=False
-    )
-    singular_values = singular_values_cross * singular_values_self
+
+    singular_values = singular_values_cross
     denom = float(np.sum(singular_values**4))
     if denom <= 0.0 or not np.isfinite(denom):
         raise ValueError(
             "Schmidt number is undefined for the supplied Green's function."
         )
-    return float(1.0 / denom)
+    return float(np.sum(singular_values**2) ** 2 / denom)
 
 
 def _build_tpa_inputs(

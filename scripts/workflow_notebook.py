@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 import numpy as np
 
 from scripts.run_stitcher import build_default_params, run_stitcher_from_params
@@ -27,6 +28,39 @@ green_functions, time_width_array, freq_width_array, stitch_times, saved_name = 
         step_fraction=5,
     )
 )
+
+# %%
+
+
+def check_green_function_identities(Gii, Gis, Gsi, Gss, dt=1.0):
+    """
+    Checks Green-function canonical identities + delta normalization.
+    """
+
+    # --- Identity 1 ---
+    C1 = dt * (Gii @ Gii.conj().T - Gis @ Gis.conj().T)
+
+    # --- Identity 2 ---
+    C2 = dt * (Gii @ Gsi.conj().T - Gis @ Gss.conj().T)
+
+    N = Gii.shape[0]
+    I = np.eye(N, dtype=complex)
+
+    # --- Errors ---
+    err1 = np.linalg.norm(C1 - I / np.sqrt(dt))
+    err2 = np.linalg.norm(C2)
+
+    return C1, C2, err1, err2
+
+
+# %%
+g1 = green_functions[0]
+f1 = green_functions[1]
+g2 = green_functions[2]
+f2 = green_functions[3]
+dt = params.dt
+
+(check_green_function_identities(f1, g1, g2, f2, dt=dt))
 
 
 # %%
