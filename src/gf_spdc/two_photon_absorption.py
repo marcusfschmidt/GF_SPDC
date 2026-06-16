@@ -74,6 +74,18 @@ class TPAHFunction:
 
 
 @dataclass(frozen=True)
+class _NormalizedTPAInputs:
+    g: ComplexArray
+    f: ComplexArray
+    g_scale: float
+    f_scale: float
+    omega: FloatArray
+    domega: float
+    gamma: float
+    omega_fg: float
+
+
+@dataclass(frozen=True)
 class _OverlapIndexCache:
     diagonal_destinations: IntArray
     anti_diagonal_indices: IntArray
@@ -102,6 +114,66 @@ def _validate_inputs(g: ComplexArray, f: ComplexArray, omega: FloatArray) -> Non
         or not np.all(np.isfinite(omega))
     ):
         raise ValueError("Green's functions and omega must contain only finite values.")
+
+
+def _normalize_green_function(field: ComplexArray) -> tuple[ComplexArray, float]:
+    field = np.asarray(field, dtype=complex)
+    finite_mask = np.isfinite(field)
+    if not np.any(finite_mask):
+        raise ValueError("Green's functions and omega must contain only finite values.")
+
+    scale = float(np.max(np.abs(field[finite_mask])))
+    if scale <= 0.0 or not np.isfinite(scale):
+        raise ValueError("Green's functions and omega must contain only finite values.")
+
+    return np.asarray(field / scale, dtype=complex), scale
+
+
+def _normalize_tpa_inputs(
+    g: ComplexArray,
+    f: ComplexArray,
+    omega: FloatArray,
+    domega: float,
+    gamma: float,
+    omega_fg: float,
+) -> _NormalizedTPAInputs:
+    g_norm, g_scale = _normalize_green_function(g)
+    f_norm, f_scale = _normalize_green_function(f)
+    return _NormalizedTPAInputs(
+        g=g_norm,
+        f=f_norm,
+        g_scale=g_scale,
+        f_scale=f_scale,
+        omega=np.asarray(omega, dtype=float),
+        domega=domega,
+        gamma=gamma,
+        omega_fg=omega_fg,
+    )
+
+
+def _rescale_breakdown(
+    breakdown: TPAContributionBreakdown,
+    g_scale: float,
+    f_scale: float,
+) -> TPAContributionBreakdown:
+    scale_coherent = f_scale * g_scale * f_scale * g_scale
+    scale_type1 = f_scale * g_scale * g_scale * g_scale
+    scale_type2 = f_scale * g_scale * g_scale * g_scale
+    scale_total = scale_coherent + scale_type1 + scale_type2
+
+    return TPAContributionBreakdown(
+        coherent=breakdown.coherent * scale_coherent,
+        incoherent_type1=breakdown.incoherent_type1 * scale_type1,
+        incoherent_type2=breakdown.incoherent_type2 * scale_type2,
+        incoherent_total=breakdown.incoherent_total * scale_type1 + breakdown.incoherent_type2 * scale_type2,
+        total=breakdown.total * scale_total,
+        g2_numerator_single_cross=breakdown.g2_numerator_single_cross * scale_coherent,
+        g2_numerator_single_same=breakdown.g2_numerator_single_same * scale_type1,
+        g2_numerator=breakdown.g2_numerator * scale_total,
+        g2_denominator_single=breakdown.g2_denominator_single * (g_scale**4),
+        g2_denominator=breakdown.g2_denominator * (g_scale**8),
+        g2=breakdown.g2,
+    )
 
 
 def _pair_matrix(
@@ -529,9 +601,7 @@ def calculate_indistinguishable_tpa_overlap(
     if len(inputs.omega) > 1 and not np.allclose(np.diff(inputs.omega), inputs.domega):
         raise ValueError("omega must be uniformly spaced with step domega.")
 
-    g_conjugate = np.conj(inputs.g)
-    f_conjugate = np.conj(inputs.f)
-    prepared = _prepare_overlap_terms(
+    normalized = _normalize_tpa_inputs(
         inputs.g,
         inputs.f,
         inputs.omega,
@@ -539,47 +609,72 @@ def calculate_indistinguishable_tpa_overlap(
         inputs.gamma,
         inputs.omega_fg,
     )
+    g_conjugate = np.conj(normalized.g)
+    f_conjugate = np.conj(normalized.f)
+    prepared = _prepare_overlap_terms(
+        normalized.g,
+        normalized.f,
+        normalized.omega,
+        normalized.domega,
+        normalized.gamma,
+        normalized.omega_fg,
+    )
 
     coherent = _coherent_overlap_contribution_prepared(
         prepared,
-        inputs.domega,
+        normalized.domega,
     )
 
     incoherent_type1 = _incoherent_overlap_contribution_type1_prepared(
         prepared,
-        inputs.domega,
+        normalized.domega,
     )
 
     incoherent_type2 = _incoherent_overlap_contribution_type2_prepared(
         prepared,
-        inputs.domega,
+        normalized.domega,
     )
     incoherent_total = incoherent_type1 + incoherent_type2
 
     g2_numerator_single_cross = _g2_numerator(
         g_conjugate,
         f_conjugate,
-        inputs.g,
-        inputs.f,
-        inputs.domega,
+        normalized.g,
+        normalized.f,
+        normalized.domega,
     )
     g2_numerator_single_same = _g2_numerator(
         g_conjugate,
-        inputs.g,
-        inputs.g,
+        normalized.g,
+        normalized.g,
         g_conjugate,
-        inputs.domega,
+        normalized.domega,
     )
     g2_numerator = (
         g2_numerator_single_cross + g2_numerator_single_same + g2_numerator_single_same
     )
 
-    g2_denominator_single = _g2_denominator(inputs.g, inputs.domega)
+    g2_denominator_single = _g2_denominator(normalized.g, normalized.domega)
     g2_denominator = g2_denominator_single**2
     if np.isclose(g2_denominator, 0.0):
         raise ValueError(
             "g2 denominator is zero or numerically singular for the supplied Green's function."
         )
+    g2_value = g2_numerator / g2_denominator
+
+    g_scale = normalized.g_scale
+    f_scale = normalized.f_scale
+    coherent *= g_scale**2 * f_scale**2
+    incoherent_type1 *= g_scale**4
+    incoherent_type2 *= g_scale**4
+    incoherent_total = incoherent_type1 + incoherent_type2
+    g2_numerator_single_cross *= g_scale**2 * f_scale**2
+    g2_numerator_single_same *= g_scale**4
+    g2_numerator = (
+        g2_numerator_single_cross + g2_numerator_single_same + g2_numerator_single_same
+    )
+    g2_denominator_single *= g_scale**2
+    g2_denominator = g2_denominator_single**2
     g2_value = g2_numerator / g2_denominator
 
     return TPAContributionBreakdown(
