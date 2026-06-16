@@ -122,7 +122,7 @@ def _extract_schmidt_number_from_stitched(
 def _build_tpa_inputs(
     green_functions: tuple[np.ndarray, ...],
     omega: np.ndarray,
-    gamma: float,
+    transition_linewidth: float,
     omega_fg: float,
     indistinguishable_bool: bool,
 ) -> DistinguishableTPAInputs:
@@ -158,7 +158,7 @@ def _build_tpa_inputs(
         g_ss=g_ss,
         omega=omega,
         domega=domega,
-        gamma=gamma,
+        transition_linewidth=transition_linewidth,
         omega_fg=omega_fg,
     )
 
