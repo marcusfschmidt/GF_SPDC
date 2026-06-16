@@ -131,8 +131,8 @@ def run_stitcher_from_params(
 
 # %%
 if __name__ == "__main__":
-    params = build_default_params(n=11, dt=0.6e-2, length=10e-3)
+    params = build_default_params(n=11)
     run_stitcher_from_params(
-        params, basis_width=0.1, pump_width=2, kmax=50, step_fraction=1.5
+        params, basis_width=0.5, pump_width=2, kmax=50, step_fraction=1.5
     )
 # %%

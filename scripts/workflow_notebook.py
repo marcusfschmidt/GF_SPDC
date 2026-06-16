@@ -18,14 +18,14 @@ from scripts.plot_greens import plot_stitched
 
 # %%
 # Generate stitched Green's functions
-params = build_default_params(n=11, length=10e-3)
+params = build_default_params(n=11, type="0", dt=0.7e-2)
 green_functions, time_width_array, freq_width_array, stitch_times, saved_name = (
     run_stitcher_from_params(
         params,
-        basis_width=0.4,
+        basis_width=0.2,
         pump_width=2,
-        kmax=50,
-        step_fraction=5,
+        kmax=25,
+        step_fraction=1.5,
     )
 )
 
@@ -34,23 +34,44 @@ green_functions, time_width_array, freq_width_array, stitch_times, saved_name = 
 
 def check_green_function_identities(Gii, Gis, Gsi, Gss, dt=1.0):
     """
-    Checks Green-function canonical identities + delta normalization.
+    Checks Green-function canonical identities for the discrete propagators
+    K = dt * G and reports both the full-grid and resolved-subspace errors.
     """
 
+    # Discrete propagators act as K @ x, where K = dt * G.
+    Kii = dt * Gii
+    Kis = dt * Gis
+    Ksi = dt * Gsi
+    Kss = dt * Gss
+
     # --- Identity 1 ---
-    C1 = dt * (Gii @ Gii.conj().T - Gis @ Gis.conj().T)
+    C1 = Kii @ Kii.conj().T - Kis @ Kis.conj().T
 
     # --- Identity 2 ---
-    C2 = dt * (Gii @ Gsi.conj().T - Gis @ Gss.conj().T)
+    C2 = Kii @ Ksi.conj().T - Kis @ Kss.conj().T
 
     N = Gii.shape[0]
     I = np.eye(N, dtype=complex)
 
+    # A truncated extraction with kmax << N cannot satisfy the full-grid
+    # identity. Compare C1 to the projector onto its numerically resolved
+    # output subspace as well.
+    eigvals, eigvecs = np.linalg.eigh(C1)
+    eigvals = np.real_if_close(eigvals)
+    projector_mask = eigvals > 0.5
+    resolved_rank = int(np.count_nonzero(projector_mask))
+    if resolved_rank > 0:
+        resolved_vectors = eigvecs[:, projector_mask]
+        projector = resolved_vectors @ resolved_vectors.conj().T
+    else:
+        projector = np.zeros_like(C1)
+
     # --- Errors ---
-    err1 = np.linalg.norm(C1 - I / np.sqrt(dt))
+    err1_full = np.linalg.norm(C1 - I)
+    err1_projector = np.linalg.norm(C1 - projector)
     err2 = np.linalg.norm(C2)
 
-    return C1, C2, err1, err2
+    return C1, C2, err1_full, err1_projector, err2, resolved_rank, eigvals
 
 
 # %%
@@ -60,7 +81,7 @@ g2 = green_functions[2]
 f2 = green_functions[3]
 dt = params.dt
 
-(check_green_function_identities(f1, g1, g2, f2, dt=dt))
+check_green_function_identities(f1, g1, g2, f2, dt=dt)
 
 
 # %%
