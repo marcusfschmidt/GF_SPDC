@@ -455,12 +455,46 @@ class GreenFunctionsExtractor:
     def schmidt_number_from_singular_values(singular_values: FloatArray) -> float:
         """Return the Schmidt number K from singular values."""
         singular_values = np.asarray(singular_values, dtype=float)
-        denom = float(np.sum(singular_values**4))
-        if denom <= 0.0 or not np.isfinite(denom):
+        if not np.all(np.isfinite(singular_values)):
             raise ValueError(
                 "Schmidt number is undefined for the supplied singular values."
             )
-        return float(1.0 / denom)
+
+        scale = float(np.max(np.abs(singular_values)))
+        if scale <= 0.0 or not np.isfinite(scale):
+            raise ValueError(
+                "Schmidt number is undefined for the supplied singular values."
+            )
+
+        normalized = singular_values / scale
+        numerator = float(np.sum(normalized**2) ** 2)
+        denominator = float(np.sum(normalized**4))
+        if denominator <= 0.0 or not np.isfinite(numerator) or not np.isfinite(denominator):
+            raise ValueError(
+                "Schmidt number is undefined for the supplied singular values."
+            )
+        return float(numerator / denominator)
+
+    @staticmethod
+    def schmidt_number_from_green_function(green_function: ComplexArray) -> float:
+        """Return the Schmidt number K from a Green's function matrix."""
+        green_function = np.asarray(green_function, dtype=complex)
+        if not np.all(np.isfinite(green_function)):
+            raise ValueError(
+                "Schmidt number is undefined for the supplied Green's function."
+            )
+
+        scale = float(np.max(np.abs(green_function)))
+        if scale <= 0.0 or not np.isfinite(scale):
+            raise ValueError(
+                "Schmidt number is undefined for the supplied Green's function."
+            )
+
+        normalized = green_function / scale
+        singular_values = np.linalg.svd(normalized, compute_uv=False)
+        return GreenFunctionsExtractor.schmidt_number_from_singular_values(
+            singular_values
+        )
 
     def run_extractor(
         self,

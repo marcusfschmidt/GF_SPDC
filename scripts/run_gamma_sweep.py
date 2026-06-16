@@ -114,17 +114,9 @@ def _extract_gamma(parameter_array: object) -> float:
 def _extract_schmidt_number_from_stitched(
     green_functions: tuple[np.ndarray, ...],
 ) -> float:
-    singular_values_cross = np.linalg.svd(
-        np.asarray(green_functions[0]), compute_uv=False
+    return GreenFunctionsExtractor.schmidt_number_from_green_function(
+        np.asarray(green_functions[0])
     )
-
-    singular_values = singular_values_cross
-    denom = float(np.sum(singular_values**4))
-    if denom <= 0.0 or not np.isfinite(denom):
-        raise ValueError(
-            "Schmidt number is undefined for the supplied Green's function."
-        )
-    return float(np.sum(singular_values**2) ** 2 / denom)
 
 
 def _build_tpa_inputs(
