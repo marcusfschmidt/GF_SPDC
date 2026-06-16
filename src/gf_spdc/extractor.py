@@ -360,6 +360,14 @@ class GreenFunctionsExtractor:
         n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1)
         return float(np.sum(n_t) * self.dt)
 
+    @staticmethod
+    def photon_number_from_green_function(
+        cross_green_time: ComplexArray, dt: float
+    ) -> float:
+        """Return the photon number for a stitched Green's function."""
+        n_t = np.sum(np.abs(cross_green_time) ** 2, axis=1)
+        return float(np.sum(n_t) * dt)
+
     def calc_overlap(
         self, green_output: ComplexArray, output_field: ComplexArray
     ) -> float:
@@ -439,6 +447,17 @@ class GreenFunctionsExtractor:
 
     def check_schmidt_numbers(self, rho: FloatArray, nu: FloatArray) -> FloatArray:
         return rho**2 - nu**2
+
+    @staticmethod
+    def schmidt_number_from_singular_values(singular_values: FloatArray) -> float:
+        """Return the Schmidt number K from singular values."""
+        singular_values = np.asarray(singular_values, dtype=float)
+        denom = float(np.sum(singular_values**4))
+        if denom <= 0.0 or not np.isfinite(denom):
+            raise ValueError(
+                "Schmidt number is undefined for the supplied singular values."
+            )
+        return float(1.0 / denom)
 
     def run_extractor(
         self,

@@ -445,7 +445,7 @@ class GreenFunctionStitcher:
                     tqdm.write(f"{iteration_header} | stitch point moved, retrying")
                     break
 
-                a_stitch_test = self.make_test_function(
+                a_stitch_test: ComplexArray = self.make_test_function(
                     stitch_time, self.current_basis_width
                 )
                 _, stitch_overlap_new = self.validate_propagation(

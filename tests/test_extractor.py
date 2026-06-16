@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import numpy as np
 
@@ -63,9 +64,12 @@ def test_make_basis_functions_uses_full_kmax_like_legacy_pipeline() -> None:
     extractor = GreenFunctionsExtractor(kmax=50, debug_bool=False)
     extractor.dt = 0.5
     extractor.time_len = 32
-    extractor.solver_object = SimpleNamespace(
+    extractor.solver_object = cast(
+        Any,
+        SimpleNamespace(
         timeShiftArray=np.zeros(2, dtype=float),
         make_hermite_gaussian_basis_functions=lambda offset, t0, order, fft_bool=True: np.full(32, order + 1, dtype=complex),
+        ),
     )
 
     extractor.make_basis_functions(t0=0.5)

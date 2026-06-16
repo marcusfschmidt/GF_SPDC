@@ -116,7 +116,6 @@ def run_stitcher_from_params(
         )
     )
 
-    print(np.max(green_functions[0]), np.max(green_functions[1]))
     saved_name = None
     if save:
         saved_name = stitcher.save_stitch_output(
@@ -132,7 +131,7 @@ def run_stitcher_from_params(
 
 # %%
 if __name__ == "__main__":
-    params = build_default_params(type="0", n=11, dt=0.7e-2)
+    params = build_default_params(n=11)
     params.gamma = 1e-5
-    run_stitcher_from_params(params, basis_width=0.2, kmax=50, step_fraction=5)
+    run_stitcher_from_params(params, basis_width=0.5, kmax=25, step_fraction=2)
 # %%
