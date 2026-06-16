@@ -35,18 +35,15 @@ def _coherent_overlap_contribution_reference(
     f2 = np.asarray((f2g2 @ np.transpose(f2g1)) * domega, dtype=complex)
     f2 = np.fliplr(f2)
 
-    omega_s = np.arange(-len(omega), len(omega), dtype=float) * domega
-    h = np.zeros(2 * len(omega), dtype=complex)
+    omega_s = np.arange(0, 2 * len(omega) - 1, dtype=float) * domega
+    h = np.zeros(2 * len(omega) - 1, dtype=complex)
 
-    for ns in range(len(omega)):
+    for ns in range(2 * len(omega) - 1):
         denominator = alpha + 1j * omega_s[ns]
-        for index in range(ns):
-            h[ns] += f1[ns - index, index] / denominator
-
-    for ns in range(len(omega)):
-        denominator = alpha + 1j * omega_s[ns + len(omega)]
-        for index in range(ns, len(omega)):
-            h[ns + len(omega)] += f1[ns - index, index] / denominator
+        for index in range(len(omega)):
+            row = ns - index
+            if 0 <= row < len(omega):
+                h[ns] += f1[row, index] / denominator
 
     h *= domega
     output = 0j
@@ -229,7 +226,12 @@ def test_indistinguishable_h_functions_store_weighted_h_vectors() -> None:
 
     np.testing.assert_allclose(
         coherent_h,
-        np.asarray(prepared.coherent_projection_fg * prepared.coherent_denominator * inputs.domega, dtype=complex),
+        np.asarray(
+            prepared.anti_diagonal_projection_fg_conjugate
+            / (prepared.alpha + 1j * np.arange(prepared.anti_diagonal_projection_fg.size, dtype=float) * inputs.domega)
+            * inputs.domega,
+            dtype=complex,
+        ),
     )
     np.testing.assert_allclose(
         incoherent_type1_h,

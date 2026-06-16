@@ -75,7 +75,6 @@ class TPAHFunction:
 
 @dataclass(frozen=True)
 class _OverlapIndexCache:
-    coherent_destinations: IntArray
     diagonal_destinations: IntArray
     anti_diagonal_indices: IntArray
     forward_difference_indices: IntArray
@@ -132,9 +131,6 @@ def _overlap_indices(size: int) -> _OverlapIndexCache:
     rows_raw, cols_raw = np.indices((size, size), dtype=int)
     rows = np.asarray(rows_raw, dtype=int)
     cols = np.asarray(cols_raw, dtype=int)
-    coherent_destinations = np.asarray(
-        np.where(rows > 0, rows + cols, size + cols).ravel(), dtype=int
-    )
     diagonal_destinations = np.asarray(
         np.where(cols > rows, size + cols - rows - 1, size + cols - rows).ravel(),
         dtype=int,
@@ -143,7 +139,6 @@ def _overlap_indices(size: int) -> _OverlapIndexCache:
     forward_difference_indices = np.asarray(cols - rows + size, dtype=int)
     backward_difference_indices = np.asarray(rows - cols + size, dtype=int)
     return _OverlapIndexCache(
-        coherent_destinations,
         diagonal_destinations,
         anti_diagonal_indices,
         forward_difference_indices,
@@ -155,13 +150,12 @@ def _overlap_indices(size: int) -> _OverlapIndexCache:
 class _PreparedOverlapTerms:
     alpha: complex
     omega_s: FloatArray
-    coherent_denominator: ComplexArray
     half_alpha_denominator: ComplexArray
     fg_pair: ComplexArray
     fg_pair_conjugate: ComplexArray
     gg_pair: ComplexArray
     gg_pair_conjugate: ComplexArray
-    coherent_projection_fg: ComplexArray
+    anti_diagonal_projection_fg_conjugate: ComplexArray
     anti_diagonal_projection_fg: ComplexArray
     diagonal_projection_gg: ComplexArray
     forward_projection_gg_conjugate: ComplexArray
@@ -180,7 +174,6 @@ def _prepare_overlap_terms(
     overlap_indices = _overlap_indices(size)
     alpha = gamma - 1j * omega_fg
     omega_s = np.arange(-size, size, dtype=float) * domega
-    coherent_denominator = 1.0 / (alpha + 1j * omega_s)
     half_alpha_denominator = alpha / 2 + 1j * omega
 
     fg_pair = _pair_matrix(f, g, domega, flip_lr=True)
@@ -188,14 +181,14 @@ def _prepare_overlap_terms(
     gg_pair = _pair_matrix(g, np.conj(g), domega, flip_lr=True)
     gg_pair_conjugate = np.conj(gg_pair)
 
-    coherent_projection_fg = _complex_bincount(
-        overlap_indices.coherent_destinations,
-        fg_pair_conjugate,
-        2 * size,
-    )
     anti_diagonal_projection_fg = _complex_bincount(
         np.asarray(overlap_indices.anti_diagonal_indices.ravel(), dtype=int),
         fg_pair,
+        2 * size - 1,
+    )
+    anti_diagonal_projection_fg_conjugate = _complex_bincount(
+        np.asarray(overlap_indices.anti_diagonal_indices.ravel(), dtype=int),
+        fg_pair_conjugate,
         2 * size - 1,
     )
     diagonal_projection_gg = _complex_bincount(
@@ -216,14 +209,13 @@ def _prepare_overlap_terms(
 
     return _PreparedOverlapTerms(
         alpha=alpha,
-        omega_s=omega_s,
-        coherent_denominator=np.asarray(coherent_denominator, dtype=complex),
+        omega_s=np.asarray(omega_s, dtype=float),
         half_alpha_denominator=np.asarray(half_alpha_denominator, dtype=complex),
         fg_pair=fg_pair,
         fg_pair_conjugate=fg_pair_conjugate,
         gg_pair=gg_pair,
         gg_pair_conjugate=gg_pair_conjugate,
-        coherent_projection_fg=coherent_projection_fg,
+        anti_diagonal_projection_fg_conjugate=anti_diagonal_projection_fg_conjugate,
         anti_diagonal_projection_fg=anti_diagonal_projection_fg,
         diagonal_projection_gg=diagonal_projection_gg,
         forward_projection_gg_conjugate=forward_projection_gg_conjugate,
@@ -235,15 +227,13 @@ def _coherent_overlap_contribution_prepared(
     prepared: _PreparedOverlapTerms,
     domega: float,
 ) -> float:
-    h = prepared.coherent_projection_fg * prepared.coherent_denominator
-    h *= domega
-    output = (
-        np.dot(
-            h[: prepared.anti_diagonal_projection_fg.size],
-            prepared.anti_diagonal_projection_fg,
-        )
-        * domega**2
+    size = prepared.fg_pair.shape[0]
+    omega_s = np.arange(0, 2 * size - 1, dtype=float) * domega
+    h = prepared.anti_diagonal_projection_fg_conjugate / (
+        prepared.alpha + 1j * omega_s
     )
+    h *= domega
+    output = np.dot(h, prepared.anti_diagonal_projection_fg) * domega**2
     return float(np.real(output))
 
 
@@ -251,7 +241,11 @@ def _coherent_h_function_prepared(
     prepared: _PreparedOverlapTerms,
     domega: float,
 ) -> ComplexArray:
-    h = prepared.coherent_projection_fg * prepared.coherent_denominator
+    size = prepared.fg_pair.shape[0]
+    omega_s = np.arange(0, 2 * size - 1, dtype=float) * domega
+    h = prepared.anti_diagonal_projection_fg_conjugate / (
+        prepared.alpha + 1j * omega_s
+    )
     return np.asarray(h * domega, dtype=complex)
 
 
@@ -343,8 +337,12 @@ def _coherent_overlap_contribution(
 
     size = len(omega)
     overlap_indices = _overlap_indices(size)
-    omega_s = np.arange(-size, size, dtype=float) * domega
-    h = _complex_bincount(overlap_indices.coherent_destinations, f1, 2 * size) / (
+    omega_s = np.arange(0, 2 * size - 1, dtype=float) * domega
+    h = _complex_bincount(
+        np.asarray(overlap_indices.anti_diagonal_indices.ravel(), dtype=int),
+        f1,
+        2 * size - 1,
+    ) / (
         alpha + 1j * omega_s
     )
     h *= domega
@@ -509,10 +507,10 @@ def calculate_indistinguishable_tpa_overlap(
 
     g2_denominator_single = _g2_denominator(inputs.g, inputs.domega)
     g2_denominator = g2_denominator_single**2
-    # if np.isclose(g2_denominator, 0.0):
-    #     raise ValueError(
-    #         "g2 denominator is zero or numerically singular for the supplied Green's function."
-    #     )
+    if np.isclose(g2_denominator, 0.0):
+        raise ValueError(
+            "g2 denominator is zero or numerically singular for the supplied Green's function."
+        )
     g2_value = g2_numerator / g2_denominator
 
     return TPAContributionBreakdown(

@@ -93,13 +93,13 @@ print(_extract_schmidt_number_from_stitched(green_functions))
 
 # %%
 # Run a gamma sweep for 2PA
-gammas = np.logspace(2, 6, num=6)  # 11 points from 1e-5 to 10, log spaced
+gammas = np.logspace(3, 5, num=3)  # 11 points from 1e-5 to 10, log spaced
 gamma_results = run_gamma_sweep(
     gammas,
     type="typeII",
     n=11,
     basis_width=0.5,
-    kmax=25,
+    kmax=30,
     rate_factor=3,
     length=10e-3,
     print_bool=True,
