@@ -83,6 +83,6 @@ def run_tpa_from_file(
 
 # %%
 if __name__ == "__main__":
-    run_tpa_from_file()
+    run_tpa_from_file(transition_linewidth=1.0)
 
 # %%
