@@ -114,7 +114,13 @@ def _extract_gamma(parameter_array: object) -> float:
 def _extract_schmidt_number_from_stitched(
     green_functions: tuple[np.ndarray, ...],
 ) -> float:
-    singular_values = np.linalg.svd(np.asarray(green_functions[0]), compute_uv=False)
+    singular_values_cross = np.linalg.svd(
+        np.asarray(green_functions[0]), compute_uv=False
+    )
+    singular_values_self = np.linalg.svd(
+        np.asarray(green_functions[1]), compute_uv=False
+    )
+    singular_values = singular_values_cross * singular_values_self
     denom = float(np.sum(singular_values**4))
     if denom <= 0.0 or not np.isfinite(denom):
         raise ValueError(
@@ -131,9 +137,21 @@ def _build_tpa_inputs(
     indistinguishable_bool: bool,
 ) -> DistinguishableTPAInputs:
     g_is = fft2_shifted(np.asarray(green_functions[0]))
-    g_ii = fft2_shifted(np.asarray(green_functions[1])) if len(green_functions) > 1 else g_is
-    g_si = fft2_shifted(np.asarray(green_functions[2])) if len(green_functions) > 2 else g_is
-    g_ss = fft2_shifted(np.asarray(green_functions[3])) if len(green_functions) > 3 else g_ii
+    g_ii = (
+        fft2_shifted(np.asarray(green_functions[1]))
+        if len(green_functions) > 1
+        else g_is
+    )
+    g_si = (
+        fft2_shifted(np.asarray(green_functions[2]))
+        if len(green_functions) > 2
+        else g_is
+    )
+    g_ss = (
+        fft2_shifted(np.asarray(green_functions[3]))
+        if len(green_functions) > 3
+        else g_ii
+    )
     omega = np.asarray(omega, dtype=float)
     domega = float(omega[1] - omega[0]) if omega.size > 1 else 1.0
 

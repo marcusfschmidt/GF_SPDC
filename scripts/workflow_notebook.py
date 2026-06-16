@@ -7,19 +7,22 @@ from pathlib import Path
 import numpy as np
 
 from scripts.run_stitcher import build_default_params, run_stitcher_from_params
-from scripts.run_gamma_sweep import run_gamma_sweep
+from scripts.run_gamma_sweep import (
+    run_gamma_sweep,
+    _extract_schmidt_number_from_stitched,
+)
 from scripts.run_two_photon_absorption import run_tpa_from_file
 from scripts.plot_greens import plot_stitched
 
 
 # %%
 # Generate stitched Green's functions
-params = build_default_params(type="0", n=11, dt=0.7e-2)
-params.gamma = 1e-5
+params = build_default_params(n=11, length=10e-3)
 green_functions, time_width_array, freq_width_array, stitch_times, saved_name = (
     run_stitcher_from_params(
         params,
-        basis_width=0.2,
+        basis_width=0.4,
+        pump_width=2,
         kmax=50,
         step_fraction=5,
     )
@@ -30,6 +33,8 @@ green_functions, time_width_array, freq_width_array, stitch_times, saved_name = 
 # Plot stitched Green's functions
 plot_stitched(saved_name)
 
+# %%
+print(_extract_schmidt_number_from_stitched(green_functions))
 
 # %%
 # Run a gamma sweep for 2PA
