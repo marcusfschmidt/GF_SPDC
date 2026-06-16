@@ -242,6 +242,7 @@ class GreenFunctionsExtractor:
                         ),
                         total=len(tasks),
                         desc="Extracting modes",
+                        disable=not self.debug_bool,
                     )
                 )
         else:
@@ -253,6 +254,7 @@ class GreenFunctionsExtractor:
                     ),
                     total=len(tasks),
                     desc="Extracting modes",
+                    disable=not self.debug_bool,
                 )
             )
         worker_time = perf_counter() - worker_start
@@ -312,13 +314,14 @@ class GreenFunctionsExtractor:
         self.field_time_array = field_time_array
         projection_time = perf_counter() - projection_start
         total_time = perf_counter() - extraction_start
-        tqdm.write(
-            (
-                f"Extraction timing: task setup {task_build_time:.2f}s, "
-                f"workers {worker_time:.2f}s, basis {basis_time:.2f}s, "
-                f"projection/SVD {projection_time:.2f}s, total {total_time:.2f}s"
+        if self.debug_bool:
+            tqdm.write(
+                (
+                    f"Extraction timing: task setup {task_build_time:.2f}s, "
+                    f"workers {worker_time:.2f}s, basis {basis_time:.2f}s, "
+                    f"projection/SVD {projection_time:.2f}s, total {total_time:.2f}s"
+                )
             )
-        )
         return (
             phi,
             rho_cross,
@@ -543,13 +546,14 @@ class GreenFunctionsExtractor:
                     schmidt_idler = self.check_schmidt_numbers(self_rho_i, signal_rho)
                     schmidt_numbers = np.vstack((schmidt_signal, schmidt_idler)).T
                     print("Finished!")
-                tqdm.write(
-                    (
-                        f"Run extractor: signal {signal_time:.2f}s, idler {idler_time:.2f}s, "
-                        f"green {green_time:.2f}s, assemble {assemble_time:.2f}s, "
-                        f"total {perf_counter() - run_start:.2f}s"
+                if self.debug_bool:
+                    tqdm.write(
+                        (
+                            f"Run extractor: signal {signal_time:.2f}s, idler {idler_time:.2f}s, "
+                            f"green {green_time:.2f}s, assemble {assemble_time:.2f}s, "
+                            f"total {perf_counter() - run_start:.2f}s"
+                        )
                     )
-                )
             else:
                 assemble_start = perf_counter()
                 args_tuple_simple: tuple[Any, ...] = (
@@ -576,13 +580,14 @@ class GreenFunctionsExtractor:
                     overlaps = self.calculate_green_overlap(g_field, f_field, is_time_array)
                     schmidt_numbers = self.check_schmidt_numbers(self_rhos, idler_rho)
                     print("Finished!")
-                tqdm.write(
-                    (
-                        f"Run extractor: signal {signal_time:.2f}s, green {green_time:.2f}s, "
-                        f"assemble {assemble_time:.2f}s, "
-                        f"total {perf_counter() - run_start:.2f}s"
+                if self.debug_bool:
+                    tqdm.write(
+                        (
+                            f"Run extractor: signal {signal_time:.2f}s, green {green_time:.2f}s, "
+                            f"assemble {assemble_time:.2f}s, "
+                            f"total {perf_counter() - run_start:.2f}s"
+                        )
                     )
-                )
 
         return g_tuple, overlaps, schmidt_numbers
 

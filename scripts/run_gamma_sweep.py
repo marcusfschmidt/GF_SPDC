@@ -200,6 +200,8 @@ def run_gamma_sweep(
     rate_factor: float = 1.0,
     omega_fg: float = 0.0,
     indistinguishable_bool: bool = False,
+    print_bool: bool = False,
+    stitch_print_bool: bool = False,
     output_dir: str | Path = "gamma_sweep_outputs",
 ) -> list[GammaSweepResult]:
     results: list[GammaSweepResult] = []
@@ -207,18 +209,26 @@ def run_gamma_sweep(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for gamma in np.asarray(gammas, dtype=float):
+        if print_bool:
+            print(f"Running gamma sweep for gamma={gamma:.2e}...")
         params = build_default_params(
             type=type, length=length, gamma=float(gamma), n=n, dt=dt, dz=dz
         )
         stitcher = GreenFunctionStitcher(params, pump_width, kmax, debug_bool=False)
+        if print_bool:
+            print(f"  extracting and stitching gamma={gamma:.2e}")
         green_functions, time_width_array, freq_width_array, stitch_times = (
             stitcher.run_full_stitch(
                 basis_width,
                 validation_threshold,
                 step_fraction=step_fraction,
                 stitch_skip_threshold=stitch_skip_threshold,
+                print_bool=stitch_print_bool,
             )
         )
+
+        if print_bool:
+            print(f"  extraction and stitching complete for gamma={gamma:.2e}")
 
         saved_filename = stitcher.save_stitch_output(
             None,
@@ -229,11 +239,18 @@ def run_gamma_sweep(
             params,
         )
 
+        if print_bool:
+            print(f"  saved stitched output to {saved_filename}")
+
         photon_number = GreenFunctionsExtractor.photon_number_from_green_function(
             np.asarray(green_functions[0]),
             stitcher.dt,
         )
+        if print_bool:
+            print(f"  photon number computed for gamma={gamma:.2e}")
         schmidt_number = _extract_schmidt_number_from_stitched(green_functions)
+        if print_bool:
+            print(f"  Schmidt number computed for gamma={gamma:.2e}")
         tpa_inputs = _build_tpa_inputs(
             green_functions,
             stitcher.omega,
@@ -243,6 +260,8 @@ def run_gamma_sweep(
         )
 
         breakdown, h_function = _calculate_2pa(tpa_inputs, indistinguishable_bool)
+        if print_bool:
+            print(f"  2PA overlap calculated for gamma={gamma:.2e}")
 
         rate = float(rate_factor * (breakdown.coherent + breakdown.incoherent_total))
 
@@ -260,6 +279,9 @@ def run_gamma_sweep(
             saved_filename=saved_filename,
         )
         results.append(result)
+
+        if print_bool:
+            print(f"Finished gamma sweep for gamma={gamma:.2e}")
 
     summary = np.array(
         [

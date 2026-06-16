@@ -372,6 +372,7 @@ class GreenFunctionStitcher:
         phase_label: str = "",
         step_fraction: float = 1.0,
         stitch_skip_threshold: float = 0.95,
+        print_bool: bool = False,
     ) -> tuple[tuple[ComplexArray, ...], WidthCollection, WidthCollection, list[float]]:
         if self.current_basis_width is None:
             raise RuntimeError("Basis width has not been set yet.")
@@ -387,7 +388,8 @@ class GreenFunctionStitcher:
         header = "Iteratively stitching Green's functions"
         if phase_label:
             header = f"{header} ({phase_label})"
-        tqdm.write(f"{header}...")
+        if print_bool:
+            tqdm.write(f"{header}...")
         stitch_times: list[float] = []
         iteration = 0
 
@@ -401,10 +403,11 @@ class GreenFunctionStitcher:
             )
 
             if test_offset < self.t[0] or test_offset > self.t[-1]:
-                tqdm.write(
-                    "Offset exceeds time axis, stitching complete. "
-                    "Inspect the output to determine if the time window should be extended."
-                )
+                if print_bool:
+                    tqdm.write(
+                        "Offset exceeds time axis, stitching complete. "
+                        "Inspect the output to determine if the time window should be extended."
+                    )
                 break
 
             a_test = self.make_test_function(test_offset, self.current_basis_width)
@@ -418,12 +421,14 @@ class GreenFunctionStitcher:
             iteration_header = f"iter {iteration}: edge={overlap:.6f}"
             self.gf.debug_print(f"Test overlap at edge of region: {overlap}")
             if overlap > 0.999:
-                tqdm.write(f"{iteration_header} | done (edge overlap > 99.9%)")
+                if print_bool:
+                    tqdm.write(f"{iteration_header} | done (edge overlap > 99.9%)")
                 break
 
             stitch_move_bool = False
             while True:
-                tqdm.write(f"{iteration_header} | extracting new Green's functions")
+                if print_bool:
+                    tqdm.write(f"{iteration_header} | extracting new Green's functions")
                 new_result = self.extract_green_functions(
                     self.current_basis_width,
                     float(width_offset_from_global_center[low_high_index]),
@@ -442,7 +447,8 @@ class GreenFunctionStitcher:
 
                 if stitch_move_bool:
                     a_test = a_stitch_test
-                    tqdm.write(f"{iteration_header} | stitch point moved, retrying")
+                    if print_bool:
+                        tqdm.write(f"{iteration_header} | stitch point moved, retrying")
                     break
 
                 a_stitch_test: ComplexArray = self.make_test_function(
@@ -463,21 +469,24 @@ class GreenFunctionStitcher:
                     plot_bool=False,
                 )
 
-                tqdm.write(
-                    f"{iteration_header} | stitch new={stitch_overlap_new:.6f} old={stitch_overlap_old:.6f} diff={abs(stitch_overlap_new - stitch_overlap_old):.6f}"
-                )
+                if print_bool:
+                    tqdm.write(
+                        f"{iteration_header} | stitch new={stitch_overlap_new:.6f} old={stitch_overlap_old:.6f} diff={abs(stitch_overlap_new - stitch_overlap_old):.6f}"
+                    )
 
                 if (
                     stitch_overlap_new > stitch_skip_threshold
                     and stitch_overlap_old > stitch_skip_threshold
                 ):
-                    tqdm.write(
-                        f"{iteration_header} | stitch point accepted (both overlaps high)"
-                    )
+                    if print_bool:
+                        tqdm.write(
+                            f"{iteration_header} | stitch point accepted (both overlaps high)"
+                        )
                     break
 
                 if abs(stitch_overlap_new - stitch_overlap_old) < 0.03:
-                    tqdm.write(f"{iteration_header} | stitch point accepted")
+                    if print_bool:
+                        tqdm.write(f"{iteration_header} | stitch point accepted")
                     break
 
                 width_offset_from_global_center -= stitch_half_width
@@ -506,16 +515,18 @@ class GreenFunctionStitcher:
                 plot_bool=False,
             )
             loop_time = perf_counter() - loop_start
-            tqdm.write(
-                f"{iteration_header} | validate={overlap_new:.6f} elapsed={loop_time:.2f}s"
-            )
+            if print_bool:
+                tqdm.write(
+                    f"{iteration_header} | validate={overlap_new:.6f} elapsed={loop_time:.2f}s"
+                )
             self.gf.debug_print(
                 f"Validation overlap at center of new Green's function: {overlap_new}"
             )
 
             if overlap_new < 0.025:
-                tqdm.write(f"{iteration_header} | done (overlap approaching zero)")
-                tqdm.write("#################################################\n")
+                if print_bool:
+                    tqdm.write(f"{iteration_header} | done (overlap approaching zero)")
+                    tqdm.write("#################################################\n")
                 return green_functions, time_width_array, freq_width_array, stitch_times
 
             width_offset_from_global_center += (
@@ -537,6 +548,7 @@ class GreenFunctionStitcher:
         sv_threshold: float = 0.01,
         step_fraction: float = 1.0,
         stitch_skip_threshold: float = 0.95,
+        print_bool: bool = False,
     ) -> tuple[tuple[ComplexArray, ...], WidthCollection, WidthCollection, list[float]]:
         """Perform full extraction and stitching in both directions and return results.
 
@@ -558,7 +570,8 @@ class GreenFunctionStitcher:
         initial_center_time = 0
         self.gf.make_pump(self.gf.solver_object.make_gaussian_input(self.T0p))
 
-        tqdm.write("Initial extraction: building Green's functions...")
+        if print_bool:
+            tqdm.write("Initial extraction: building Green's functions...")
 
         extraction_result = self.extract_green_functions(
             t0, -initial_center_time, check_bool=False
@@ -578,9 +591,10 @@ class GreenFunctionStitcher:
         #         "Consider increasing the number of basis functions or the time resolution. "
         #         f"Initial overlap: {init_overlap:.6f}"
         #     )
-        tqdm.write(
-            "Initial extraction complete. Starting iterative stitching (pass 1)..."
-        )
+        if print_bool:
+            tqdm.write(
+                "Initial extraction complete. Starting iterative stitching (pass 1)..."
+            )
 
         green_functions, time_width_array, freq_width_array, stitch_times_1 = (
             self.iterative_stitch(
@@ -595,10 +609,12 @@ class GreenFunctionStitcher:
                 phase_label="pass 1",
                 step_fraction=step_fraction,
                 stitch_skip_threshold=stitch_skip_threshold,
+                print_bool=print_bool,
             )
         )
 
-        tqdm.write("Starting iterative stitching (pass 2)...")
+        if print_bool:
+            tqdm.write("Starting iterative stitching (pass 2)...")
 
         green_functions, time_width_array, freq_width_array, stitch_times_2 = (
             self.iterative_stitch(
@@ -613,6 +629,7 @@ class GreenFunctionStitcher:
                 phase_label="pass 2",
                 step_fraction=step_fraction,
                 stitch_skip_threshold=stitch_skip_threshold,
+                print_bool=print_bool,
             )
         )
 

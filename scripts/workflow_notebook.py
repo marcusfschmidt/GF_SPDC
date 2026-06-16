@@ -93,15 +93,17 @@ print(_extract_schmidt_number_from_stitched(green_functions))
 
 # %%
 # Run a gamma sweep for 2PA
-gammas = np.logspace(-5, 2, num=15)  # 11 points from 1e-5 to 10, log spaced
-gammas = [100]
+gammas = np.logspace(2, 6, num=6)  # 11 points from 1e-5 to 10, log spaced
 gamma_results = run_gamma_sweep(
     gammas,
     type="typeII",
     n=11,
     basis_width=0.5,
     kmax=25,
-    rate_factor=1.0,
+    rate_factor=3,
+    length=10e-3,
+    print_bool=True,
+    stitch_print_bool=False,
 )
 
 
@@ -127,6 +129,9 @@ plt.xscale("log")
 plt.yscale("log")
 plt.show()
 
+# %%
+print(photon_number_array)
+print(schmidt_number_array)
 # %%
 h = np.array([result.h_function for result in gamma_results])
 plt.plot(np.abs(h[0].coherent) ** 2)
