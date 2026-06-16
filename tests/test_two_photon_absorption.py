@@ -31,22 +31,20 @@ def _coherent_overlap_contribution_reference(
 ) -> float:
     alpha = gamma - 1j * omega_fg
     f1 = np.asarray((f1g2 @ np.transpose(f1g1)) * domega, dtype=complex)
-    f1 = np.fliplr(f1)
     f2 = np.asarray((f2g2 @ np.transpose(f2g1)) * domega, dtype=complex)
-    f2 = np.fliplr(f2)
 
     omega_s = np.arange(-len(omega), len(omega), dtype=float) * domega
     h = np.zeros(2 * len(omega), dtype=complex)
 
     for ns in range(len(omega)):
-        denominator = alpha + 1j * omega_s[ns]
-        for index in range(ns):
-            h[ns] += f1[ns - index, index] / denominator
-
-    for ns in range(len(omega)):
         denominator = alpha + 1j * omega_s[ns + len(omega)]
-        for index in range(ns, len(omega)):
+        for index in range(len(omega) - ns):
             h[ns + len(omega)] += f1[ns - index, index] / denominator
+
+    for ns in reversed(range(len(omega))):
+        denominator = alpha + 1j * omega_s[ns]
+        for index in range(len(omega) - ns, len(omega)):
+            h[ns] += f1[ns - index, index] / denominator
 
     h *= domega
     output = 0j
@@ -230,14 +228,14 @@ def test_indistinguishable_h_functions_store_weighted_h_vectors() -> None:
     expected_coherent_h = np.zeros(2 * prepared.fg_pair.shape[0], dtype=complex)
     size = prepared.fg_pair.shape[0]
     for ns in range(size):
-        for index in range(ns):
-            expected_coherent_h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
-                prepared.alpha + 1j * prepared.omega_s[ns]
-            )
-    for ns in range(size):
-        for index in range(ns, size):
+        for index in range(size - ns):
             expected_coherent_h[ns + size] += prepared.fg_pair_conjugate[ns - index, index] / (
                 prepared.alpha + 1j * prepared.omega_s[ns + size]
+            )
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            expected_coherent_h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns]
             )
     expected_coherent_h *= inputs.domega
 

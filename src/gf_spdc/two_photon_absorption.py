@@ -170,7 +170,7 @@ def _prepare_overlap_terms(
     omega_s = np.arange(-size, size, dtype=float) * domega
     half_alpha_denominator = alpha / 2 + 1j * omega
 
-    fg_pair = _pair_matrix(f, g, domega, flip_lr=True)
+    fg_pair = _pair_matrix(f, g, domega, flip_lr=False)
     fg_pair_conjugate = np.conj(fg_pair)
     gg_pair = _pair_matrix(g, np.conj(g), domega, flip_lr=True)
     gg_pair_conjugate = np.conj(gg_pair)
@@ -194,15 +194,15 @@ def _coherent_overlap_contribution_prepared(
     h = np.zeros(2 * size, dtype=complex)
 
     for ns in range(size):
-        for index in range(ns):
-            h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
-                prepared.alpha + 1j * prepared.omega_s[ns]
-            )
-
-    for ns in range(size):
-        for index in range(ns, size):
+        for index in range(size - ns):
             h[ns + size] += prepared.fg_pair_conjugate[ns - index, index] / (
                 prepared.alpha + 1j * prepared.omega_s[ns + size]
+            )
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns]
             )
 
     h *= domega
@@ -224,15 +224,15 @@ def _coherent_h_function_prepared(
     h = np.zeros(2 * size, dtype=complex)
 
     for ns in range(size):
-        for index in range(ns):
-            h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
-                prepared.alpha + 1j * prepared.omega_s[ns]
-            )
-
-    for ns in range(size):
-        for index in range(ns, size):
+        for index in range(size - ns):
             h[ns + size] += prepared.fg_pair_conjugate[ns - index, index] / (
                 prepared.alpha + 1j * prepared.omega_s[ns + size]
+            )
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns]
             )
 
     return np.asarray(h * domega, dtype=complex)
@@ -371,22 +371,22 @@ def _coherent_overlap_contribution(
     omega_fg: float,
 ) -> float:
     alpha = gamma - 1j * omega_fg
-    f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=True)
-    f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
+    f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=False)
+    f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=False)
 
     size = len(omega)
     omega_s = np.arange(-size, size, dtype=float) * domega
     h = np.zeros(2 * size, dtype=complex)
 
     for ns in range(size):
-        for index in range(ns):
-            h[ns] += f1[ns - index, index] / (alpha + 1j * omega_s[ns])
-
-    for ns in range(size):
-        for index in range(ns, size):
+        for index in range(size - ns):
             h[ns + size] += f1[ns - index, index] / (
                 alpha + 1j * omega_s[ns + size]
             )
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h[ns] += f1[ns - index, index] / (alpha + 1j * omega_s[ns])
 
     h *= domega
     output = 0j
