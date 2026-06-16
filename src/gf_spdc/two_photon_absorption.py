@@ -259,7 +259,7 @@ def _prepare_overlap_terms(
     omega_s = np.arange(-size, size, dtype=float) * domega
     half_alpha_denominator = alpha / 2 + 1j * omega
 
-    fg_pair = _pair_matrix(f, g, domega, flip_lr=False)
+    fg_pair = _pair_matrix(f, g, domega, flip_lr=True)
     fg_pair_conjugate = np.conj(fg_pair)
     gg_pair = _pair_matrix(g, np.conj(g), domega, flip_lr=True)
     gg_pair_conjugate = np.conj(gg_pair)
@@ -460,8 +460,8 @@ def _coherent_overlap_contribution(
     omega_fg: float,
 ) -> float:
     alpha = gamma - 1j * omega_fg
-    f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=False)
-    f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=False)
+    f1 = _pair_matrix(f1g2, f1g1, domega, flip_lr=True)
+    f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
     size = len(omega)
     omega_s = np.arange(-size, size, dtype=float) * domega
