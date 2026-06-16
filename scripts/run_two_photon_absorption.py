@@ -11,7 +11,7 @@ from `gf_spdc.two_photon_absorption`.
 """
 
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 
@@ -36,27 +36,10 @@ def load_stitched_green_functions(filename: str | Path | None = None) -> tuple:
     return tuple(np.load(filename, allow_pickle=True))
 
 
-def _extract_gamma(parameter_array: object) -> float:
-    """Extract gamma from the stitched parameter payload."""
-    if hasattr(parameter_array, "gamma"):
-        return float(getattr(parameter_array, "gamma"))
-
-    if isinstance(parameter_array, np.ndarray):
-        if parameter_array.ndim == 0:
-            parameter_array = cast(Any, parameter_array).item()
-        else:
-            parameter_array = cast(Any, parameter_array).tolist()
-
-    if isinstance(parameter_array, (list, tuple)) and len(parameter_array) > 5:
-        return float(cast(Any, parameter_array[5]))
-
-    raise ValueError("Could not extract gamma from stitched parameter data.")
-
-
 def build_tpa_inputs(
     filename: str | Path | None = None,
     *,
-    transition_linewidth: float | None = None,
+    transition_linewidth: float,
     omega_fg: float = 0.0,
 ) -> IndistinguishableTPAInputs:
     """Build `IndistinguishableTPAInputs` from a stitched Green's file."""
@@ -67,8 +50,6 @@ def build_tpa_inputs(
     f = fft2_shifted(np.asarray(green_functions[1]))
     omega = np.asarray(omega, dtype=float)
     domega = float(omega[1] - omega[0]) if omega.size > 1 else 1.0
-    if transition_linewidth is None:
-        transition_linewidth = _extract_gamma(parameter_array)
     return IndistinguishableTPAInputs(
         g=g,
         f=f,
@@ -82,7 +63,7 @@ def build_tpa_inputs(
 def run_tpa_from_file(
     filename: str | Path | None = None,
     *,
-    transition_linewidth: float | None = None,
+    transition_linewidth: float,
     omega_fg: float = 0.0,
 ) -> TPAContributionBreakdown:
     """Load stitched Green's functions and compute the 2PA overlap."""

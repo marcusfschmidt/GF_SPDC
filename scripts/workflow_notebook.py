@@ -94,8 +94,10 @@ print(_extract_schmidt_number_from_stitched(green_functions))
 # %%
 # Run a gamma sweep for 2PA
 gammas = np.logspace(3, 5, num=1)  # 11 points from 1e-5 to 10, log spaced
+transition_linewidth = 1.0
 gamma_results = run_gamma_sweep(
     gammas,
+    transition_linewidth=transition_linewidth,
     type="typeII",
     n=11,
     basis_width=0.5,
@@ -106,8 +108,6 @@ gamma_results = run_gamma_sweep(
     print_bool=True,
     stitch_print_bool=False,
 )
-
-transition_linewidth = 1.0
 
 
 # %%
