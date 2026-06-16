@@ -151,14 +151,36 @@ class GreenFunctionStitcher:
         )
 
     def find_width(self, green_function: ComplexArray) -> tuple[WidthTuple, WidthTuple]:
-        green_time = np.abs(green_function) ** 2
-        green_frequency = np.abs(self.gf.fft(green_function)) ** 2
+        def normalized_intensity(field: ComplexArray) -> NDArray[np.float64]:
+            amplitude = np.abs(field).astype(float, copy=False)
+            finite_mask = np.isfinite(amplitude)
+            if not np.any(finite_mask):
+                return np.zeros_like(amplitude, dtype=float)
+
+            scale = float(np.max(amplitude[finite_mask]))
+            if scale <= 0.0 or not np.isfinite(scale):
+                return np.zeros_like(amplitude, dtype=float)
+
+            scaled = np.divide(
+                amplitude,
+                scale,
+                out=np.zeros_like(amplitude, dtype=float),
+                where=finite_mask,
+            )
+            return np.square(scaled, dtype=float)
+
+        green_time = normalized_intensity(green_function)
+        green_frequency = normalized_intensity(self.gf.fft(green_function))
         return self.width_helper_function(green_time), self.width_helper_function(
             green_frequency
         )
 
     def width_helper_function(self, values: NDArray[np.float64]) -> WidthTuple:
-        threshold = float(np.mean(values))
+        finite_values = values[np.isfinite(values)]
+        if finite_values.size == 0:
+            return (0, values.shape[1] - 1, 0, values.shape[0] - 1)
+
+        threshold = float(np.mean(finite_values))
         non_zero_indices = np.where(values > threshold)
         x_coordinates = non_zero_indices[1]
         y_coordinates = non_zero_indices[0]
