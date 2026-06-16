@@ -149,17 +149,12 @@ def _overlap_indices(size: int) -> _OverlapIndexCache:
 @dataclass(frozen=True)
 class _PreparedOverlapTerms:
     alpha: complex
-    omega_s: FloatArray
     half_alpha_denominator: ComplexArray
     fg_pair: ComplexArray
     fg_pair_conjugate: ComplexArray
     gg_pair: ComplexArray
     gg_pair_conjugate: ComplexArray
-    anti_diagonal_projection_fg_conjugate: ComplexArray
-    anti_diagonal_projection_fg: ComplexArray
-    diagonal_projection_gg: ComplexArray
-    forward_projection_gg_conjugate: ComplexArray
-    backward_projection_gg_conjugate: ComplexArray
+    omega_s: FloatArray
 
 
 def _prepare_overlap_terms(
@@ -170,9 +165,8 @@ def _prepare_overlap_terms(
     gamma: float,
     omega_fg: float,
 ) -> _PreparedOverlapTerms:
-    size = g.shape[0]
-    overlap_indices = _overlap_indices(size)
     alpha = gamma - 1j * omega_fg
+    size = g.shape[0]
     omega_s = np.arange(-size, size, dtype=float) * domega
     half_alpha_denominator = alpha / 2 + 1j * omega
 
@@ -181,45 +175,14 @@ def _prepare_overlap_terms(
     gg_pair = _pair_matrix(g, np.conj(g), domega, flip_lr=True)
     gg_pair_conjugate = np.conj(gg_pair)
 
-    anti_diagonal_projection_fg = _complex_bincount(
-        np.asarray(overlap_indices.anti_diagonal_indices.ravel(), dtype=int),
-        fg_pair,
-        2 * size - 1,
-    )
-    anti_diagonal_projection_fg_conjugate = _complex_bincount(
-        np.asarray(overlap_indices.anti_diagonal_indices.ravel(), dtype=int),
-        fg_pair_conjugate,
-        2 * size - 1,
-    )
-    diagonal_projection_gg = _complex_bincount(
-        overlap_indices.diagonal_destinations,
-        gg_pair,
-        2 * size,
-    )
-    forward_projection_gg_conjugate = _complex_bincount(
-        np.asarray(overlap_indices.forward_difference_indices.ravel(), dtype=int),
-        gg_pair_conjugate,
-        2 * size,
-    )
-    backward_projection_gg_conjugate = _complex_bincount(
-        np.asarray(overlap_indices.backward_difference_indices.ravel(), dtype=int),
-        gg_pair_conjugate,
-        2 * size,
-    )
-
     return _PreparedOverlapTerms(
         alpha=alpha,
-        omega_s=np.asarray(omega_s, dtype=float),
         half_alpha_denominator=np.asarray(half_alpha_denominator, dtype=complex),
         fg_pair=fg_pair,
         fg_pair_conjugate=fg_pair_conjugate,
         gg_pair=gg_pair,
         gg_pair_conjugate=gg_pair_conjugate,
-        anti_diagonal_projection_fg_conjugate=anti_diagonal_projection_fg_conjugate,
-        anti_diagonal_projection_fg=anti_diagonal_projection_fg,
-        diagonal_projection_gg=diagonal_projection_gg,
-        forward_projection_gg_conjugate=forward_projection_gg_conjugate,
-        backward_projection_gg_conjugate=backward_projection_gg_conjugate,
+        omega_s=np.asarray(omega_s, dtype=float),
     )
 
 
@@ -228,12 +191,28 @@ def _coherent_overlap_contribution_prepared(
     domega: float,
 ) -> float:
     size = prepared.fg_pair.shape[0]
-    omega_s = np.arange(0, 2 * size - 1, dtype=float) * domega
-    h = prepared.anti_diagonal_projection_fg_conjugate / (
-        prepared.alpha + 1j * omega_s
-    )
+    h = np.zeros(2 * size, dtype=complex)
+
+    for ns in range(size):
+        for index in range(ns):
+            h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns]
+            )
+
+    for ns in range(size):
+        for index in range(ns, size):
+            h[ns + size] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns + size]
+            )
+
     h *= domega
-    output = np.dot(h, prepared.anti_diagonal_projection_fg) * domega**2
+    output = 0j
+    for omega_index in range(size):
+        for omega_prime_index in range(size):
+            output += h[omega_index + omega_prime_index] * prepared.fg_pair[
+                omega_index, omega_prime_index
+            ]
+    output *= domega**2
     return float(np.real(output))
 
 
@@ -242,10 +221,20 @@ def _coherent_h_function_prepared(
     domega: float,
 ) -> ComplexArray:
     size = prepared.fg_pair.shape[0]
-    omega_s = np.arange(0, 2 * size - 1, dtype=float) * domega
-    h = prepared.anti_diagonal_projection_fg_conjugate / (
-        prepared.alpha + 1j * omega_s
-    )
+    h = np.zeros(2 * size, dtype=complex)
+
+    for ns in range(size):
+        for index in range(ns):
+            h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns]
+            )
+
+    for ns in range(size):
+        for index in range(ns, size):
+            h[ns + size] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns + size]
+            )
+
     return np.asarray(h * domega, dtype=complex)
 
 
@@ -253,17 +242,28 @@ def _incoherent_overlap_contribution_type1_prepared(
     prepared: _PreparedOverlapTerms,
     domega: float,
 ) -> float:
-    overlap_indices = _overlap_indices(prepared.gg_pair.shape[0])
-    anti_diagonal_denominator = prepared.alpha + 1j * prepared.omega_s[:-1]
-    h = prepared.diagonal_projection_gg.copy()
+    size = prepared.gg_pair.shape[0]
+    h = np.zeros(2 * size, dtype=complex)
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h[2 * size - ns - 1] += prepared.gg_pair[index + ns - size, index]
+
+    for ns in range(size):
+        for index in range(size - ns):
+            h[size - ns] += prepared.gg_pair[ns + index, index]
+
     h *= domega
-    weighted_forward_projection = _complex_bincount(
-        np.asarray(overlap_indices.forward_difference_indices.ravel(), dtype=int),
-        prepared.gg_pair_conjugate
-        / anti_diagonal_denominator[overlap_indices.anti_diagonal_indices],
-        2 * prepared.gg_pair.shape[0],
-    )
-    output = np.dot(h, weighted_forward_projection) * domega**2
+    output = 0j
+    for omega_index in range(size):
+        for omega_prime_index in range(size):
+            output += h[omega_index - omega_prime_index + size] * prepared.gg_pair_conjugate[
+                omega_prime_index, omega_index
+            ] / (
+                prepared.alpha
+                + 1j * prepared.omega_s[omega_index + omega_prime_index]
+            )
+    output *= domega**2
     return float(np.real(output))
 
 
@@ -271,7 +271,17 @@ def _incoherent_type1_h_function_prepared(
     prepared: _PreparedOverlapTerms,
     domega: float,
 ) -> ComplexArray:
-    h = prepared.diagonal_projection_gg.copy()
+    size = prepared.gg_pair.shape[0]
+    h = np.zeros(2 * size, dtype=complex)
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h[2 * size - ns - 1] += prepared.gg_pair[index + ns - size, index]
+
+    for ns in range(size):
+        for index in range(size - ns):
+            h[size - ns] += prepared.gg_pair[ns + index, index]
+
     h *= domega
     return np.asarray(h, dtype=complex)
 
@@ -280,27 +290,47 @@ def _incoherent_overlap_contribution_type2_prepared(
     prepared: _PreparedOverlapTerms,
     domega: float,
 ) -> float:
-    overlap_indices = _overlap_indices(prepared.gg_pair.shape[0])
-    h1 = _complex_bincount(
-        overlap_indices.diagonal_destinations,
-        prepared.gg_pair / prepared.half_alpha_denominator[np.newaxis, :],
-        2 * prepared.gg_pair.shape[0],
-    )
+    size = prepared.gg_pair.shape[0]
+    h1 = np.zeros(2 * size, dtype=complex)
+    h2 = np.zeros(2 * size, dtype=complex)
+
+    for ns in range(size):
+        for index in range(size - ns):
+            h1[size - ns] += prepared.gg_pair[ns + index, index] / (
+                prepared.half_alpha_denominator[index]
+            )
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h1[2 * size - ns - 1] += prepared.gg_pair[
+                index + ns - size, index
+            ] / prepared.half_alpha_denominator[index]
+
     h1 *= domega
-    inv_lambda_1 = np.dot(h1, prepared.backward_projection_gg_conjugate) * domega**2
+    inv_lambda_1 = 0j
+    for omega_tilde_index in range(size):
+        for omega_prime_index in range(size):
+            inv_lambda_1 += h1[omega_tilde_index - omega_prime_index + size] * prepared.gg_pair_conjugate[
+                omega_tilde_index, omega_prime_index
+            ]
+    inv_lambda_1 *= domega**2
 
-    weighted_backward_projection = _complex_bincount(
-        np.asarray(overlap_indices.backward_difference_indices.ravel(), dtype=int),
-        prepared.gg_pair_conjugate / prepared.half_alpha_denominator[np.newaxis, :],
-        2 * prepared.gg_pair.shape[0],
-    )
-    inv_lambda_2 = (
-        np.dot(prepared.diagonal_projection_gg * domega, weighted_backward_projection)
-        * domega**2
-    )
+    for ns in range(size):
+        for index in range(size - ns):
+            h2[size - ns] += prepared.gg_pair[ns + index, index]
 
-    # if np.isclose(inv_lambda_1, 0.0) or np.isclose(inv_lambda_2, 0.0):
-    #     raise ValueError("Incoherent type-2 contribution is singular for the supplied inputs.")
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h2[2 * size - ns - 1] += prepared.gg_pair[index + ns - size, index]
+
+    h2 *= domega
+    inv_lambda_2 = 0j
+    for omega_tilde_index in range(size):
+        for omega_prime_index in range(size):
+            inv_lambda_2 += h2[omega_tilde_index - omega_prime_index + size] * prepared.gg_pair_conjugate[
+                omega_tilde_index, omega_prime_index
+            ] / prepared.half_alpha_denominator[omega_prime_index]
+    inv_lambda_2 *= domega**2
 
     lambda_total = 1 / inv_lambda_1 + 1 / inv_lambda_2
     output = 1 / lambda_total
@@ -311,12 +341,21 @@ def _incoherent_type2_h_function_prepared(
     prepared: _PreparedOverlapTerms,
     domega: float,
 ) -> ComplexArray:
-    overlap_indices = _overlap_indices(prepared.gg_pair.shape[0])
-    h1 = _complex_bincount(
-        overlap_indices.diagonal_destinations,
-        prepared.gg_pair / prepared.half_alpha_denominator[np.newaxis, :],
-        2 * prepared.gg_pair.shape[0],
-    )
+    size = prepared.gg_pair.shape[0]
+    h1 = np.zeros(2 * size, dtype=complex)
+
+    for ns in range(size):
+        for index in range(size - ns):
+            h1[size - ns] += prepared.gg_pair[ns + index, index] / (
+                prepared.half_alpha_denominator[index]
+            )
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h1[2 * size - ns - 1] += prepared.gg_pair[
+                index + ns - size, index
+            ] / prepared.half_alpha_denominator[index]
+
     h1 *= domega
     return np.asarray(h1, dtype=complex)
 
@@ -336,17 +375,27 @@ def _coherent_overlap_contribution(
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
     size = len(omega)
-    overlap_indices = _overlap_indices(size)
-    omega_s = np.arange(0, 2 * size - 1, dtype=float) * domega
-    h = _complex_bincount(
-        np.asarray(overlap_indices.anti_diagonal_indices.ravel(), dtype=int),
-        f1,
-        2 * size - 1,
-    ) / (
-        alpha + 1j * omega_s
-    )
+    omega_s = np.arange(-size, size, dtype=float) * domega
+    h = np.zeros(2 * size, dtype=complex)
+
+    for ns in range(size):
+        for index in range(ns):
+            h[ns] += f1[ns - index, index] / (alpha + 1j * omega_s[ns])
+
+    for ns in range(size):
+        for index in range(ns, size):
+            h[ns + size] += f1[ns - index, index] / (
+                alpha + 1j * omega_s[ns + size]
+            )
+
     h *= domega
-    output = np.sum(h[overlap_indices.anti_diagonal_indices] * f2) * domega**2
+    output = 0j
+    for omega_index in range(size):
+        for omega_prime_index in range(size):
+            output += h[omega_index + omega_prime_index] * f2[
+                omega_index, omega_prime_index
+            ]
+    output *= domega**2
     return float(np.real(output))
 
 
@@ -365,18 +414,25 @@ def _incoherent_overlap_contribution_type1(
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
     size = len(omega)
-    overlap_indices = _overlap_indices(size)
     omega_s = np.arange(-size, size, dtype=float) * domega
-    h = _complex_bincount(overlap_indices.diagonal_destinations, f1, 2 * size)
+    h = np.zeros(2 * size, dtype=complex)
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h[2 * size - ns - 1] += f1[index + ns - size, index]
+
+    for ns in range(size):
+        for index in range(size - ns):
+            h[size - ns] += f1[ns + index, index]
+
     h *= domega
-    output = (
-        np.sum(
-            h[overlap_indices.forward_difference_indices]
-            * f2
-            / (alpha + 1j * omega_s[overlap_indices.anti_diagonal_indices])
-        )
-        * domega**2
-    )
+    output = 0j
+    for omega_index in range(size):
+        for omega_prime_index in range(size):
+            output += h[omega_index - omega_prime_index + size] * f2[
+                omega_prime_index, omega_index
+            ] / (alpha + 1j * omega_s[omega_index + omega_prime_index])
+    output *= domega**2
     return float(np.real(output))
 
 
@@ -395,33 +451,44 @@ def _incoherent_overlap_contribution_type2(
     f2 = _pair_matrix(f2g2, f2g1, domega, flip_lr=True)
 
     size = len(omega)
-    overlap_indices = _overlap_indices(size)
-    half_alpha_denominator = alpha / 2 + 1j * omega
-    h1 = _complex_bincount(
-        overlap_indices.diagonal_destinations,
-        f1 / half_alpha_denominator[np.newaxis, :],
-        2 * size,
-    )
+    h1 = np.zeros(2 * size, dtype=complex)
+    h2 = np.zeros(2 * size, dtype=complex)
+
+    for ns in range(size):
+        for index in range(size - ns):
+            h1[size - ns] += f1[ns + index, index] / (alpha / 2 + 1j * omega[index])
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h1[2 * size - ns - 1] += f1[index + ns - size, index] / (
+                alpha / 2 + 1j * omega[index]
+            )
+
     h1 *= domega
-    inv_lambda_1 = (
-        np.sum(h1[overlap_indices.backward_difference_indices] * f2) * domega**2
-    )
+    inv_lambda_1 = 0j
+    for omega_tilde_index in range(size):
+        for omega_prime_index in range(size):
+            inv_lambda_1 += h1[omega_tilde_index - omega_prime_index + size] * f2[
+                omega_tilde_index, omega_prime_index
+            ]
+    inv_lambda_1 *= domega**2
 
-    h2 = _complex_bincount(overlap_indices.diagonal_destinations, f1, 2 * size)
+    for ns in range(size):
+        for index in range(size - ns):
+            h2[size - ns] += f1[ns + index, index]
+
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            h2[2 * size - ns - 1] += f1[index + ns - size, index]
+
     h2 *= domega
-    inv_lambda_2 = (
-        np.sum(
-            h2[overlap_indices.backward_difference_indices]
-            * f2
-            / half_alpha_denominator[np.newaxis, :]
-        )
-        * domega**2
-    )
-
-    # if np.isclose(inv_lambda_1, 0.0) or np.isclose(inv_lambda_2, 0.0):
-    #     raise ValueError(
-    #         "Incoherent type-2 contribution is singular for the supplied inputs."
-    #     )
+    inv_lambda_2 = 0j
+    for omega_tilde_index in range(size):
+        for omega_prime_index in range(size):
+            inv_lambda_2 += h2[omega_tilde_index - omega_prime_index + size] * f2[
+                omega_tilde_index, omega_prime_index
+            ] / (alpha / 2 + 1j * omega[omega_prime_index])
+    inv_lambda_2 *= domega**2
 
     lambda_total = 1 / inv_lambda_1 + 1 / inv_lambda_2
     output = 1 / lambda_total
@@ -435,14 +502,16 @@ def _g2_numerator(
     f2g2: ComplexArray,
     domega: float,
 ) -> complex:
-    f1_sum = np.sum(f1g2, axis=0) @ np.sum(f1g1, axis=0)
-    f2_sum = np.sum(f2g2, axis=0) @ np.sum(f2g1, axis=0)
-    return complex(f1_sum * f2_sum * domega**6)
+    f1 = np.asarray((f1g2 @ np.transpose(f1g1)) * domega, dtype=complex)
+    f2 = np.asarray((f2g2 @ np.transpose(f2g1)) * domega, dtype=complex)
+    tal = np.sum(f1) * domega**2 * np.sum(f2) * domega**2
+    return complex(tal)
 
 
 def _g2_denominator(gjj: ComplexArray, domega: float) -> complex:
-    gjj_sum = np.sum(gjj, axis=0)
-    return complex((np.conj(gjj_sum) @ gjj_sum) * domega**3)
+    f = np.asarray((np.conj(gjj) @ np.transpose(gjj)) * domega, dtype=complex)
+    tal = np.sum(f) * domega**2
+    return complex(tal)
 
 
 def calculate_indistinguishable_tpa_overlap(

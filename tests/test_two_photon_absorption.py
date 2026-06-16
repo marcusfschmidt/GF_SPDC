@@ -35,15 +35,18 @@ def _coherent_overlap_contribution_reference(
     f2 = np.asarray((f2g2 @ np.transpose(f2g1)) * domega, dtype=complex)
     f2 = np.fliplr(f2)
 
-    omega_s = np.arange(0, 2 * len(omega) - 1, dtype=float) * domega
-    h = np.zeros(2 * len(omega) - 1, dtype=complex)
+    omega_s = np.arange(-len(omega), len(omega), dtype=float) * domega
+    h = np.zeros(2 * len(omega), dtype=complex)
 
-    for ns in range(2 * len(omega) - 1):
+    for ns in range(len(omega)):
         denominator = alpha + 1j * omega_s[ns]
-        for index in range(len(omega)):
-            row = ns - index
-            if 0 <= row < len(omega):
-                h[ns] += f1[row, index] / denominator
+        for index in range(ns):
+            h[ns] += f1[ns - index, index] / denominator
+
+    for ns in range(len(omega)):
+        denominator = alpha + 1j * omega_s[ns + len(omega)]
+        for index in range(ns, len(omega)):
+            h[ns + len(omega)] += f1[ns - index, index] / denominator
 
     h *= domega
     output = 0j
@@ -224,27 +227,45 @@ def test_indistinguishable_h_functions_store_weighted_h_vectors() -> None:
     incoherent_type1_h = _incoherent_type1_h_function_prepared(prepared, inputs.domega)
     incoherent_type2_h = _incoherent_type2_h_function_prepared(prepared, inputs.domega)
 
+    expected_coherent_h = np.zeros(2 * prepared.fg_pair.shape[0], dtype=complex)
+    size = prepared.fg_pair.shape[0]
+    for ns in range(size):
+        for index in range(ns):
+            expected_coherent_h[ns] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns]
+            )
+    for ns in range(size):
+        for index in range(ns, size):
+            expected_coherent_h[ns + size] += prepared.fg_pair_conjugate[ns - index, index] / (
+                prepared.alpha + 1j * prepared.omega_s[ns + size]
+            )
+    expected_coherent_h *= inputs.domega
+
     np.testing.assert_allclose(
         coherent_h,
-        np.asarray(
-            prepared.anti_diagonal_projection_fg_conjugate
-            / (prepared.alpha + 1j * np.arange(prepared.anti_diagonal_projection_fg.size, dtype=float) * inputs.domega)
-            * inputs.domega,
-            dtype=complex,
-        ),
-    )
-    np.testing.assert_allclose(
-        incoherent_type1_h,
-        np.asarray(prepared.diagonal_projection_gg * inputs.domega, dtype=complex),
+        expected_coherent_h,
     )
 
-    overlap_indices = _overlap_indices(prepared.gg_pair.shape[0])
-    expected_type2 = np.zeros(2 * prepared.gg_pair.shape[0], dtype=complex)
-    np.add.at(
-        expected_type2,
-        np.asarray(overlap_indices.diagonal_destinations, dtype=int).ravel(),
-        (prepared.gg_pair / prepared.half_alpha_denominator[np.newaxis, :]).ravel(),
+    expected_type1 = np.zeros(2 * size, dtype=complex)
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            expected_type1[2 * size - ns - 1] += prepared.gg_pair[index + ns - size, index]
+    for ns in range(size):
+        for index in range(size - ns):
+            expected_type1[size - ns] += prepared.gg_pair[ns + index, index]
+    expected_type1 *= inputs.domega
+    np.testing.assert_allclose(
+        incoherent_type1_h,
+        expected_type1,
     )
+
+    expected_type2 = np.zeros(2 * size, dtype=complex)
+    for ns in range(size):
+        for index in range(size - ns):
+            expected_type2[size - ns] += prepared.gg_pair[ns + index, index] / prepared.half_alpha_denominator[index]
+    for ns in reversed(range(size)):
+        for index in range(size - ns, size):
+            expected_type2[2 * size - ns - 1] += prepared.gg_pair[index + ns - size, index] / prepared.half_alpha_denominator[index]
     expected_type2 *= inputs.domega
     np.testing.assert_allclose(incoherent_type2_h, expected_type2)
 
